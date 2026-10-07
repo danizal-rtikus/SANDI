@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -11,8 +11,49 @@ import {
   Copy, 
   Check,
   AlignLeft,
-  FileCheck
+  FileCheck,
+  Highlighter
 } from 'lucide-react';
+
+const INDO_STOPWORDS = new Set([
+  'apa', 'apakah', 'bagaimana', 'dimana', 'kapan', 'siapa', 'mengapa', 'kenapa',
+  'yang', 'di', 'ke', 'dari', 'pada', 'dalam', 'untuk', 'dengan', 'dan', 'atau',
+  'ini', 'itu', 'adalah', 'yaitu', 'ada', 'bisa', 'dapat', 'akan', 'telah', 'sudah',
+  'jika', 'kalau', 'maka', 'tentang', 'terkait', 'oleh', 'secara', 'sebagai', 'serta',
+  'aturan', 'diatur', 'bagaimanakah', 'dimanakah', 'tersebut', 'stikom', 'yos', 'sudarso'
+]);
+
+function extractKeywords(queryStr) {
+  if (!queryStr) return [];
+  const tokens = queryStr
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const keywords = tokens.filter(t => t.length > 2 && !INDO_STOPWORDS.has(t));
+  return [...new Set(keywords)];
+}
+
+function highlightKeywords(text, keywords) {
+  if (!text || !keywords || keywords.length === 0) return text;
+  try {
+    const escaped = keywords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, idx) => {
+      if (regex.test(part)) {
+        return (
+          <mark key={idx} className="doc-highlight-mark">
+            {part}
+          </mark>
+        );
+      }
+      return part;
+    });
+  } catch (e) {
+    return text;
+  }
+}
 
 export default function PdfViewerModal({ 
   documentId, 
@@ -50,11 +91,18 @@ export default function PdfViewerModal({
   const cleanTitle = rawTitle.replace(/^\d+[\s._-]+/, '');
   const maxPage = docDetails?.page_count || 1;
 
+  // Ekstraksi kata kunci penelusuran
+  const keywords = useMemo(() => extractKeywords(query), [query]);
+  const primarySearchTerm = keywords.slice(0, 3).join(' ');
+
   // Temukan chunk/potongan teks untuk halaman saat ini
   const activeChunk = docDetails?.chunks?.find(c => c.page_number === page);
   const displaySnippet = activeChunk?.content || (page === initialPage ? initialSnippet : 'Konten naskah pada halaman ini dapat ditelaah langsung pada panel PDF asli di sebelah kiri.');
 
-  const pdfUrl = `/api/documents/${documentId}/file#page=${page}&view=FitH`;
+  // URL PDF dengan parameter loncat ke halaman & search query bawaan peramban
+  const pdfUrl = primarySearchTerm
+    ? `/api/documents/${documentId}/file#page=${page}&search=${encodeURIComponent(primarySearchTerm)}&view=FitH`
+    : `/api/documents/${documentId}/file#page=${page}&view=FitH`;
 
   const copyCitation = () => {
     const docNum = docDetails?.doc_number ? `No. ${docDetails.doc_number}` : 'SPMI-SYS';
@@ -201,7 +249,7 @@ export default function PdfViewerModal({
             {viewMode === 'pdf' ? (
               <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <iframe 
-                  key={`${documentId}-${page}`}
+                  key={`${documentId}-${page}-${primarySearchTerm}`}
                   src={pdfUrl} 
                   className="pdf-embed-frame"
                   title={`Naskah Asli ${cleanTitle} Halaman ${page}`}
@@ -216,7 +264,13 @@ export default function PdfViewerModal({
                   alignItems: 'center' 
                 }}>
                   <span>Menampilkan lembar PDF resmi • STIKOM Yos Sudarso</span>
-                  <span>Navigasikan halaman via bilah atas atau kontrol PDF browser</span>
+                  {keywords.length > 0 ? (
+                    <span style={{ color: '#fef08a' }}>
+                      Sorotan Otomatis: {keywords.join(', ')}
+                    </span>
+                  ) : (
+                    <span>Navigasikan halaman via bilah atas atau kontrol PDF peramban</span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -273,7 +327,7 @@ export default function PdfViewerModal({
                   border: '1px solid #e2e8f0',
                   marginBottom: '1.25rem'
                 }}>
-                  {displaySnippet}
+                  {highlightKeywords(displaySnippet, keywords)}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -310,6 +364,17 @@ export default function PdfViewerModal({
                 Metadata legalitas & bukti otentikasi naskah
               </div>
             </div>
+
+            {/* Keyword Focus Bar jika ada kata kunci pencarian */}
+            {keywords.length > 0 && (
+              <div className="keyword-focus-bar">
+                <Highlighter size={13} />
+                <span style={{ fontWeight: 700 }}>Kata Kunci:</span>
+                {keywords.map((kw, i) => (
+                  <span key={i} className="keyword-chip">{kw}</span>
+                ))}
+              </div>
+            )}
 
             {/* Kartu Metadata Resmi */}
             <div className="dossier-meta-card">
@@ -355,7 +420,7 @@ export default function PdfViewerModal({
               </div>
             </div>
 
-            {/* Kutipan Klausul Kunci */}
+            {/* Kutipan Klausul Kunci dengan Highlight Otomatis */}
             <div>
               <div style={{ 
                 fontSize: '0.75rem', 
@@ -374,7 +439,7 @@ export default function PdfViewerModal({
                 </span>
               </div>
               <div className="dossier-quote-box">
-                {displaySnippet}
+                {highlightKeywords(displaySnippet, keywords)}
               </div>
             </div>
 
