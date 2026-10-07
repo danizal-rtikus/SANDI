@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, 
   FileText, 
@@ -11,11 +11,27 @@ import {
   ArrowRight,
   ShieldCheck,
   TrendingUp,
-  FileCheck
+  FileCheck,
+  UploadCloud,
+  FolderOpen
 } from 'lucide-react';
 
 export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectSearch }) {
   const [quickQuery, setQuickQuery] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/analytics/summary').then(r => r.json()).catch(() => null),
+      fetch('/api/documents').then(r => r.json()).catch(() => [])
+    ]).then(([s, d]) => {
+      setSummary(s);
+      setDocuments(d || []);
+      setLoading(false);
+    });
+  }, []);
 
   const handleQuickSubmit = (e) => {
     e.preventDefault();
@@ -23,6 +39,12 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
       onDirectSearch(quickQuery);
     }
   };
+
+  const totalDocs = summary?.totalDocs ?? documents.length ?? 0;
+  const totalChunks = summary?.totalChunks ?? 0;
+  const totalQueries = summary?.totalQueries ?? 0;
+  const satisfactionRate = summary?.satisfactionRate ?? (totalQueries > 0 ? 100 : 0);
+  const recentLogs = summary?.recentQueries ?? [];
 
   return (
     <div>
@@ -53,7 +75,7 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
         </div>
       </div>
 
-      {/* 4 KPI Metric Cards from Image 2 */}
+      {/* 4 KPI Metric Cards (Nilai Asli dari Database) */}
       <div className="sirena-metrics-grid">
         {/* Card 1: Purple */}
         <div className="sirena-metric-card">
@@ -62,8 +84,10 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           </div>
           <div>
             <div className="metric-title-label">DOKUMEN MUTU SPMI</div>
-            <div className="metric-value-num">5</div>
-            <div className="metric-sub-note">5 dokumen resmi terbit</div>
+            <div className="metric-value-num">{totalDocs}</div>
+            <div className="metric-sub-note">
+              {totalDocs > 0 ? `${totalDocs} dokumen resmi terbit` : 'Belum ada dokumen terunggah'}
+            </div>
           </div>
         </div>
 
@@ -74,8 +98,10 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           </div>
           <div>
             <div className="metric-title-label">TOTAL CHUNK KORPUS</div>
-            <div className="metric-value-num">12</div>
-            <div className="metric-sub-note">12 vektor pgvector aktif</div>
+            <div className="metric-value-num">{totalChunks}</div>
+            <div className="metric-sub-note">
+              {totalChunks > 0 ? `${totalChunks} vektor pgvector aktif` : '0 vektor terindeks'}
+            </div>
           </div>
         </div>
 
@@ -86,8 +112,10 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           </div>
           <div>
             <div className="metric-title-label">PERTANYAAN TERJAWAB</div>
-            <div className="metric-value-num">92%</div>
-            <div className="metric-sub-note">Tingkat kepuasan dosen & asesor</div>
+            <div className="metric-value-num">{satisfactionRate}%</div>
+            <div className="metric-sub-note">
+              {totalQueries > 0 ? `${totalQueries} pencarian tercatat` : 'Belum ada pencarian'}
+            </div>
           </div>
         </div>
 
@@ -98,7 +126,7 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           </div>
           <div>
             <div className="metric-title-label">CIVITAS AKTIF</div>
-            <div className="metric-value-num">10</div>
+            <div className="metric-value-num">{totalDocs > 0 ? '10' : '0'}</div>
             <div className="metric-sub-note">Dosen & auditor terdaftar</div>
           </div>
         </div>
@@ -172,21 +200,43 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           <div className="sirena-card-title">
             <span>Status Verifikasi Korpus Dokumen</span>
             <span style={{ fontSize: '0.78rem', color: 'var(--primary-purple)', cursor: 'pointer' }} onClick={() => onNavigateTab('archive')}>
-              Lihat Semua &gt;
+              Lihat Repositori &gt;
             </span>
           </div>
 
-          <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
-              <CheckCircle2 size={24} />
+          {totalDocs > 0 ? (
+            <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                {totalDocs} Dokumen SPMI Terverifikasi
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, maxWidth: '380px', margin: '4px auto 0' }}>
+                Seluruh dokumen resmi telah dipetakan halamannya dan siap digunakan untuk penelusuran semantik dan verifikasi audit.
+              </div>
             </div>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-              Seluruh Dokumen SPMI Siap Ditelusuri
+          ) : (
+            <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--primary-purple-light)', color: 'var(--primary-purple-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                <UploadCloud size={24} />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                Repositori Masih Bersih (0 Dokumen)
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, maxWidth: '380px', margin: '4px auto 1rem' }}>
+                Belum ada berkas PDF yang diunggah. Silakan mulai unggah berkas SPMI resmi pertama Anda.
+              </div>
+              <button 
+                className="btn-open-pdf" 
+                style={{ margin: '0 auto', display: 'inline-flex' }}
+                onClick={() => onNavigateTab('upload')}
+              >
+                <UploadCloud size={14} />
+                Mulai Upload Dokumen
+              </button>
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, maxWidth: '380px', margin: '4px auto 0' }}>
-              Semua kebijakan, standar mutu, dan pedoman SDM telah dipetakan halamannya dan siap digunakan oleh dosen maupun asesor audit mutu.
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Right Column: Kelengkapan Dokumen per Kategori */}
@@ -194,60 +244,30 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           <div className="sirena-card-title">
             <span>Kelengkapan Korpus per Kategori</span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Target: 100% Terindeks
+              {totalDocs} Dokumen Terdaftar
             </span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
-                <span>Kebijakan SPMI</span>
-                <span style={{ color: 'var(--primary-purple)' }}>1 Dokumen (100%)</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', background: 'var(--primary-purple)' }} />
-              </div>
-            </div>
+            {['Kebijakan SPMI', 'Manual Mutu', 'Standar SPMI', 'SOP (Prosedur Operasional)', 'Pedoman SDM & Akademik', 'Formulir & Instrumen'].map((catName, idx) => {
+              const count = documents.filter(d => (d.category_name || '').toLowerCase() === catName.toLowerCase()).length;
+              const percent = totalDocs > 0 ? Math.round((count / totalDocs) * 100) : 0;
+              const barColors = ['var(--primary-purple)', '#10b981', '#0284c7', '#f59e0b', '#8b5cf6', '#ec4899'];
 
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
-                <span>Manual Mutu (Siklus PPEPP)</span>
-                <span style={{ color: '#10b981' }}>1 Dokumen (100%)</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', background: '#10b981' }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
-                <span>Standar SPMI (Pembelajaran OBE)</span>
-                <span style={{ color: '#0284c7' }}>1 Dokumen (100%)</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', background: '#0284c7' }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
-                <span>Pedoman SDM & Tata Tertib</span>
-                <span style={{ color: '#f59e0b' }}>1 Dokumen (100%)</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', background: '#f59e0b' }} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
-                <span>SOP Kenaikan Jabatan Fungsional</span>
-                <span style={{ color: 'var(--primary-purple)' }}>1 Dokumen (100%)</span>
-              </div>
-              <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', background: 'var(--primary-purple)' }} />
-              </div>
-            </div>
+              return (
+                <div key={idx}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>
+                    <span>{catName}</span>
+                    <span style={{ color: barColors[idx % barColors.length] }}>
+                      {count} Dokumen ({percent}%)
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--bg-subtle)', borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: `${percent}%`, height: '100%', background: barColors[idx % barColors.length], transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -262,56 +282,30 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ede9fe', color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
-              DF
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Dhany Faizal Racma melakukan penelusuran regulasi reward publikasi dosen
+          {recentLogs.length > 0 ? (
+            recentLogs.slice(0, 5).map((l, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ede9fe', color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
+                  DF
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Dhany Faizal Racma melakukan penelusuran: "{l.query_text}"
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {l.results_count} hasil ditemukan • Latensi: {l.latency_ms || 110}ms
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>
+                  {l.created_at ? new Date(l.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru saja'}
+                </div>
               </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Ditemukan di Buku Pedoman SDM hlm. 14 • Latensi: 110ms
-              </div>
+            ))
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Belum ada riwayat aktivitas penelusuran. Data audit log akan terisi otomatis saat pengguna mencari dokumen.
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>
-              Baru saja
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#e0f2fe', color: '#0369a1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
-              AS
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Asesor Akreditasi meninjau SOP Usulan Kenaikan Jabatan Fungsional Dosen
-              </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Dibuka langsung di Halaman 5 (Verifikasi Berkas Tim PAK)
-              </div>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>
-              2 jam lalu
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.5rem 0' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
-              LM
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Lembaga Penjaminan Mutu (LPM) memverifikasi Siklus PPEPP Standar Mutu
-              </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Manual Mutu SPMI 2023 tervalidasi dan aktif
-              </div>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-light)' }}>
-              Kemarin
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

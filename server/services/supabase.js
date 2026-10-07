@@ -10,47 +10,10 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 class LocalStore {
   constructor() {
     this.categories = [...sampleCategories];
-    this.documents = [...sampleDocuments];
+    this.documents = [];
     this.jobs = [];
-    this.searchLogs = [
-      {
-        id: "log-001",
-        query_text: "aturan pemberian reward dan insentif dosen",
-        results_count: 2,
-        top_score: 0.88,
-        answered: true,
-        latency_ms: 120,
-        created_at: new Date(Date.now() - 3600000 * 4).toISOString()
-      },
-      {
-        id: "log-002",
-        query_text: "syarat kenaikan jabatan lektor 200",
-        results_count: 2,
-        top_score: 0.84,
-        answered: true,
-        latency_ms: 95,
-        created_at: new Date(Date.now() - 3600000 * 2).toISOString()
-      },
-      {
-        id: "log-003",
-        query_text: "prosedur audit mutu internal AMI",
-        results_count: 1,
-        top_score: 0.91,
-        answered: true,
-        latency_ms: 80,
-        created_at: new Date(Date.now() - 3600000 * 1).toISOString()
-      }
-    ];
-    this.feedback = [
-      {
-        id: 1,
-        search_log_id: "log-001",
-        chunk_id: "chunk-sdm-14",
-        is_helpful: true,
-        comment: "Sangat membantu, langsung ketemu pasal dan halamannya!",
-        created_at: new Date(Date.now() - 3600000 * 3).toISOString()
-      }
-    ];
+    this.searchLogs = [];
+    this.feedback = [];
     this.isSupabaseLive = false;
   }
 
@@ -344,7 +307,7 @@ class LocalStore {
 
     const helpfulFeedback = this.feedback.filter(f => f.is_helpful).length;
     const totalFeedback = this.feedback.length;
-    const satisfactionRate = totalFeedback > 0 ? Math.round((helpfulFeedback / totalFeedback) * 100) : 92;
+    const satisfactionRate = totalFeedback > 0 ? Math.round((helpfulFeedback / totalFeedback) * 100) : 0;
 
     return {
       totalDocs,
