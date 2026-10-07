@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { sampleCategories, sampleDocuments } from '../sampleData.js';
 
@@ -5,6 +7,9 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://fznhvuyplojsvcodxfkk.su
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_8kuEfbZU64XFihkNdDI7gQ_jpRHGc6e';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+const DATA_DIR = path.resolve('server/data');
+const PERSISTED_FILE = path.join(DATA_DIR, 'persisted_documents.json');
 
 // In-memory / local state fallback jika tabel Supabase belum dimigrasi
 class LocalStore {
@@ -15,6 +20,35 @@ class LocalStore {
     this.searchLogs = [];
     this.feedback = [];
     this.isSupabaseLive = false;
+
+    // Muat data dokumen yang tersimpan di disk
+    this.loadPersisted();
+  }
+
+  loadPersisted() {
+    try {
+      if (fs.existsSync(PERSISTED_FILE)) {
+        const raw = fs.readFileSync(PERSISTED_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.documents = parsed;
+          console.log(`📦 Memuat ${parsed.length} dokumen tersimpan dari ${PERSISTED_FILE}`);
+        }
+      }
+    } catch (err) {
+      console.warn('Peringatan membaca persisted_documents.json:', err.message);
+    }
+  }
+
+  savePersisted() {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(PERSISTED_FILE, JSON.stringify(this.documents, null, 2), 'utf8');
+    } catch (err) {
+      console.warn('Peringatan menyimpan persisted_documents.json:', err.message);
+    }
   }
 
   async checkSupabaseConnection() {
@@ -37,66 +71,88 @@ class LocalStore {
   async getCategories() {
     if (this.isSupabaseLive) {
       const { data, error } = await supabase.from('document_categories').select('*').order('sort_order', { ascending: true });
-      if (!error && data) return data;
+      if (!error && data && data.length > 0) return data;
     }
     return this.categories;
   }
 
   // Documents
   async getDocuments(filter = {}) {
+    let supabaseDocs = [];
     if (this.isSupabaseLive) {
-      let query = supabase.from('documents').select('*, document_categories(name)');
-      if (filter.category_id) query = query.eq('category_id', filter.category_id);
-      if (filter.status) query = query.eq('status', filter.status);
-      const { data, error } = await query.order('created_at', { ascending: false });
-      if (!error && data) {
-        return data.map(d => ({
-          ...d,
-          category_name: d.document_categories?.name || 'Umum'
-        }));
+      try {
+        let query = supabase.from('documents').select('*, document_categories(name)');
+        if (filter.category_id) query = query.eq('category_id', filter.category_id);
+        if (filter.status) query = query.eq('status', filter.status);
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          supabaseDocs = data.map(d => ({
+            ...d,
+            category_name: d.document_categories?.name || 'Umum'
+          }));
+        }
+      } catch (err) {
+        console.warn('Peringatan mengambil dokumen Supabase:', err.message);
       }
     }
 
-    let docs = [...this.documents];
+    // Gabungkan dengan dokumen lokal agar dokumen yang diunggah selalu tampil
+    const existingIds = new Set(supabaseDocs.map(d => String(d.id)));
+    let localDocs = this.documents.filter(d => !existingIds.has(String(d.id)));
+
     if (filter.category_id) {
-      docs = docs.filter(d => Number(d.category_id) === Number(filter.category_id));
+      localDocs = localDocs.filter(d => Number(d.category_id) === Number(filter.category_id));
     }
     if (filter.status) {
-      docs = docs.filter(d => d.status === filter.status);
+      localDocs = localDocs.filter(d => d.status === filter.status);
     }
-    return docs;
+
+    return [...supabaseDocs, ...localDocs];
   }
 
   async getDocumentById(id) {
     if (this.isSupabaseLive) {
-      const { data, error } = await supabase.from('documents').select('*, document_categories(name)').eq('id', id).single();
-      if (!error && data) {
-        // Ambil chunks
-        const { data: chunks } = await supabase.from('document_chunks').select('*').eq('document_id', id).order('page_number', { ascending: true });
-        return {
-          ...data,
-          category_name: data.document_categories?.name || 'Umum',
-          chunks: chunks || []
-        };
+      try {
+        const { data, error } = await supabase.from('documents').select('*, document_categories(name)').eq('id', id).single();
+        if (!error && data) {
+          // Ambil chunks
+          const { data: chunks } = await supabase.from('document_chunks').select('*').eq('document_id', id).order('page_number', { ascending: true });
+          return {
+            ...data,
+            category_name: data.document_categories?.name || 'Umum',
+            chunks: chunks || []
+          };
+        }
+      } catch (e) {
+        // Lanjut ke pencarian lokal
       }
     }
 
-    const doc = this.documents.find(d => d.id === id);
+    const doc = this.documents.find(d => String(d.id) === String(id));
     return doc || null;
   }
 
   async checkDuplicateSha(checksum) {
     if (this.isSupabaseLive) {
-      const { data } = await supabase.from('documents').select('id, title').eq('checksum_sha256', checksum).maybeSingle();
-      if (data) return data;
+      try {
+        const { data } = await supabase.from('documents').select('id, title').eq('checksum_sha256', checksum).maybeSingle();
+        if (data) return data;
+      } catch (e) {
+        // fallback
+      }
     }
     return this.documents.find(d => d.checksum_sha256 === checksum) || null;
   }
 
   async addDocument(docData, chunks = []) {
+    // Pastikan nama kategori terisi dengan benar
+    const cat = this.categories.find(c => Number(c.id) === Number(docData.category_id));
+    const categoryName = cat?.name || docData.category_name || 'Kebijakan SPMI';
+
     const newDoc = {
       ...docData,
       id: docData.id || `doc-${Date.now()}`,
+      category_name: categoryName,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       chunks: chunks.map((c, i) => ({
@@ -106,44 +162,64 @@ class LocalStore {
       }))
     };
 
+    // Coba simpan ke Supabase jika live
     if (this.isSupabaseLive) {
       try {
-        const { data, error } = await supabase.from('documents').insert([docData]).select().single();
-        if (!error && data) {
-          if (chunks.length > 0) {
-            const chunksToInsert = chunks.map(c => ({
-              document_id: data.id,
-              page_number: c.page_number,
-              chunk_index: c.chunk_index,
-              content: c.content,
-              token_count: c.token_count,
-              section_title: c.section_title,
-              is_noise: c.is_noise,
-              embedding: c.embedding,
-              embedding_model: c.embedding_model || 'gemini-embedding-001@768'
-            }));
-            await supabase.from('document_chunks').insert(chunksToInsert);
-          }
-          return data;
+        const supabasePayload = {
+          title: docData.title,
+          doc_number: docData.doc_number || null,
+          category_id: docData.category_id ? Number(docData.category_id) : 1,
+          year: docData.year ? Number(docData.year) : 2021,
+          version: docData.version || '1.0',
+          description: docData.description || '',
+          access: docData.access || 'publik_internal',
+          status: docData.status || 'published',
+          is_active: docData.is_active !== false,
+          storage_path: docData.storage_path,
+          file_size_bytes: docData.file_size_bytes,
+          checksum_sha256: docData.checksum_sha256,
+          page_count: docData.page_count
+        };
+        const { data, error } = await supabase.from('documents').insert([supabasePayload]).select().single();
+        if (error) {
+          console.warn('ℹ️ Supabase RLS note (dokumen tersimpan aman di korpus lokal):', error.message);
+        } else if (data && chunks.length > 0) {
+          const chunksToInsert = chunks.map(c => ({
+            document_id: data.id,
+            page_number: c.page_number,
+            chunk_index: c.chunk_index,
+            content: c.content,
+            token_count: c.token_count,
+            section_title: c.section_title,
+            is_noise: c.is_noise,
+            embedding: c.embedding,
+            embedding_model: c.embedding_model || 'gemini-embedding-001@768'
+          }));
+          await supabase.from('document_chunks').insert(chunksToInsert);
         }
       } catch (err) {
-        console.error('Error inserting to Supabase:', err);
+        console.warn('Supabase insert note:', err.message);
       }
     }
 
     this.documents.unshift(newDoc);
+    this.savePersisted();
     return newDoc;
   }
 
   async updateDocument(id, updates) {
     if (this.isSupabaseLive) {
-      const { data, error } = await supabase.from('documents').update(updates).eq('id', id).select().single();
-      if (!error && data) return data;
+      try {
+        await supabase.from('documents').update(updates).eq('id', id);
+      } catch (e) {
+        // fallback
+      }
     }
 
-    const index = this.documents.findIndex(d => d.id === id);
+    const index = this.documents.findIndex(d => String(d.id) === String(id));
     if (index !== -1) {
       this.documents[index] = { ...this.documents[index], ...updates, updated_at: new Date().toISOString() };
+      this.savePersisted();
       return this.documents[index];
     }
     return null;
@@ -151,9 +227,14 @@ class LocalStore {
 
   async deleteDocument(id) {
     if (this.isSupabaseLive) {
-      await supabase.from('documents').delete().eq('id', id);
+      try {
+        await supabase.from('documents').delete().eq('id', id);
+      } catch (e) {
+        // fallback
+      }
     }
-    this.documents = this.documents.filter(d => d.id !== id);
+    this.documents = this.documents.filter(d => String(d.id) !== String(id));
+    this.savePersisted();
     return true;
   }
 
