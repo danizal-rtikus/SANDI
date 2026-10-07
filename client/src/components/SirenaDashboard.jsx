@@ -13,7 +13,8 @@ import {
   TrendingUp,
   FileCheck,
   UploadCloud,
-  FolderOpen
+  FolderOpen,
+  RefreshCw
 } from 'lucide-react';
 
 export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectSearch }) {
@@ -52,27 +53,25 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
       <div className="dashboard-header-block">
         <div>
           <div className="dashboard-heading-title">
-            Dashboard Ka. Prodi (DKV) — Dhany Faizal Racma, S.Kom., M.Kom.
+            Dashboard Repositori & Navigasi SPMI
             <span className="heading-tag-purple">
-              DKV — Desain Komunikasi Visual
+              LPM — STIKOM Yos Sudarso
             </span>
           </div>
           <div className="dashboard-heading-desc">
-            Pantau repositori dokumen SPMI real-time, penelusuran semantik pasal regulasi, dan evaluasi kepatuhan akreditasi STIKOM Yos Sudarso.
+            Pantau repositori dokumen mutu institusi real-time, status korpus terindeks, dan penelusuran regulasi internal STIKOM Yos Sudarso.
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-            Filter Prodi:
-          </span>
-          <select className="header-filter-select" defaultValue="dkv">
-            <option value="dkv">DKV — Desain Komunikasi Visual</option>
-            <option value="if">Informatika</option>
-            <option value="si">Sistem Informasi</option>
-            <option value="all">Semua Program Studi</option>
-          </select>
-        </div>
+        <button 
+          className="btn-feedback" 
+          onClick={fetchData}
+          title="Segarkan Data Dashboard"
+          style={{ padding: '0.5rem 0.85rem' }}
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Segarkan Data
+        </button>
       </div>
 
       {/* 4 KPI Metric Cards (Nilai Asli dari Database) */}

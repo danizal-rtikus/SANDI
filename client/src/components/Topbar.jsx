@@ -88,7 +88,7 @@ export default function Topbar({
               }}
               title="Ganti Simulasi Peran Pengguna"
             >
-              <option value="dosen">Ka. Prodi / Dosen</option>
+              <option value="dosen">Dosen / Tendik</option>
               <option value="asesor">Asesor / Auditor</option>
               <option value="admin_mutu">Admin Mutu (LPM)</option>
               <option value="super_admin">Super Admin</option>
