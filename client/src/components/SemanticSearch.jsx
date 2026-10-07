@@ -14,7 +14,8 @@ import {
   ChevronRight,
   HelpCircle,
   Copy,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 
 
@@ -99,6 +100,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
   const [categoryId, setCategoryId] = useState('');
   const [year, setYear] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [results, setResults] = useState(null);
   const [ragAnswer, setRagAnswer] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
@@ -143,6 +145,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
 
     setLoading(true);
     setRagAnswer(null);
+    setIsSynthesizing(false);
 
     try {
       const res = await fetch('/api/search', {
@@ -171,6 +174,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
 
       // Panggil generasi jawaban RAG jika ada hasil
       if (data.results && data.results.length > 0) {
+        setIsSynthesizing(true);
         fetch('/api/answer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -183,7 +187,12 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           .then(ansData => {
             setRagAnswer(ansData);
           })
-          .catch(console.error);
+          .catch(err => {
+            console.error('Error generating answer:', err);
+          })
+          .finally(() => {
+            setIsSynthesizing(false);
+          });
       }
     } catch (err) {
       console.error(err);
@@ -313,6 +322,59 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           )}
         </div>
       </div>
+
+      {/* Audit Progress Steps & Skeleton Loader (Opsi B) */}
+      {isSynthesizing && !ragAnswer && (
+        <div className="rag-skeleton-card">
+          <div className="rag-skeleton-header">
+            <div className="rag-skeleton-title-wrap">
+              <div className="rag-skeleton-badge">
+                <Loader2 size={17} className="spin-slow" />
+                <span>Menyusun Telaah Dokumen SPMI...</span>
+              </div>
+              <span className="rag-skeleton-subtitle">
+                Sistem sedang membedah klausul regulasi dan merumuskan telaah objektif naskah STIKOM Yos Sudarso
+              </span>
+            </div>
+          </div>
+
+          {/* Audit Progress Steps */}
+          <div className="rag-steps-box">
+            <div className="rag-step-item done">
+              <CheckCircle2 size={15} color="#16a34a" />
+              <span>
+                Penelusuran {searchMeta?.resultsCount || results?.length || 8} naskah dokumen SPMI selesai ({searchMeta?.latencyMs || 230} ms)
+              </span>
+            </div>
+            <div className="rag-step-item active">
+              <Loader2 size={14} className="spin-slow" color="#0284c7" />
+              <span>Menelaah pasal resmi & menyintesis ketetapan formal...</span>
+            </div>
+          </div>
+
+          {/* Skeleton Lines with Shimmer */}
+          <div className="rag-skeleton-content">
+            <div className="skeleton-section-block">
+              <div className="skeleton-badge-line" />
+              <div className="skeleton-line skeleton-w-full" />
+              <div className="skeleton-line skeleton-w-85" />
+            </div>
+
+            <div className="skeleton-section-block">
+              <div className="skeleton-badge-line" />
+              <div className="skeleton-line skeleton-w-95" />
+              <div className="skeleton-line skeleton-w-75" />
+              <div className="skeleton-line skeleton-w-80" />
+            </div>
+
+            <div className="skeleton-chips-block">
+              <div className="skeleton-chip" />
+              <div className="skeleton-chip" />
+              <div className="skeleton-chip" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* RAG Answer Summary Card (FR-30, FR-31) */}
       {ragAnswer && (
