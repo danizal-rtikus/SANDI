@@ -291,14 +291,17 @@ app.get('/api/documents/:id/file', async (req, res) => {
     }
 
     if (doc.storage_path && doc.storage_path.startsWith('/uploads/')) {
-      const filePath = path.join(__dirname, doc.storage_path);
+      const cleanRel = doc.storage_path.replace(/^\/+/, '');
+      const filePath = path.join(__dirname, cleanRel);
       if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(path.basename(filePath))}"`);
         return res.sendFile(filePath);
       }
     }
 
     // Jika file eksternal di Supabase
-    res.json({ url: doc.storage_path });
+    res.redirect(doc.storage_path);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

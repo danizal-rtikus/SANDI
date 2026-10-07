@@ -10,22 +10,25 @@ import {
   ShieldCheck, 
   Copy, 
   Check,
-  Maximize2
+  AlignLeft,
+  FileCheck
 } from 'lucide-react';
 
 export default function PdfViewerModal({ 
   documentId, 
   initialPage = 1, 
   query = '', 
-  documentTitle = '',
-  initialSnippet = '',
-  onClose,
+  documentTitle = '', 
+  initialSnippet = '', 
+  onClose, 
   onShowToast 
 }) {
   const [page, setPage] = useState(initialPage || 1);
+  const [viewMode, setViewMode] = useState('pdf'); // 'pdf' | 'transcript'
   const [docDetails, setDocDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [copiedCitation, setCopiedCitation] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
 
   useEffect(() => {
     if (documentId) {
@@ -43,18 +46,34 @@ export default function PdfViewerModal({
     }
   }, [documentId]);
 
-  const maxPage = docDetails?.page_count || 48;
+  const rawTitle = docDetails?.title || documentTitle || '';
+  const cleanTitle = rawTitle.replace(/^\d+[\s._-]+/, '');
+  const maxPage = docDetails?.page_count || 1;
 
-  // Temukan chunk untuk halaman aktif saat ini jika ada
+  // Temukan chunk/potongan teks untuk halaman saat ini
   const activeChunk = docDetails?.chunks?.find(c => c.page_number === page);
-  const displaySnippet = activeChunk ? activeChunk.content : (page === initialPage ? initialSnippet : 'Konten halaman ini dapat ditinjau langsung pada naskah lengkap.');
+  const displaySnippet = activeChunk?.content || (page === initialPage ? initialSnippet : 'Konten naskah pada halaman ini dapat ditelaah langsung pada panel PDF asli di sebelah kiri.');
+
+  const pdfUrl = `/api/documents/${documentId}/file#page=${page}&view=FitH`;
 
   const copyCitation = () => {
-    const citationText = `[Dokumen: "${docDetails?.title || documentTitle}", Nomor: ${docDetails?.doc_number || '-'}, Halaman ${page}] - STIKOM Yos Sudarso SPMI`;
+    const docNum = docDetails?.doc_number ? `No. ${docDetails.doc_number}` : 'SPMI-SYS';
+    const citationText = `[STIKOM Yos Sudarso] ${cleanTitle}, Dokumen ${docNum}, Hlm. ${page}. Kategori: ${docDetails?.category_name || 'SPMI'}.`;
     navigator.clipboard.writeText(citationText);
-    setCopiedSnippet(true);
-    onShowToast('Format sitasi resmi berhasil disalin ke clipboard!');
-    setTimeout(() => setCopiedSnippet(false), 2500);
+    setCopiedCitation(true);
+    if (onShowToast) onShowToast('Format sitasi borang akreditasi berhasil disalin!');
+    setTimeout(() => setCopiedCitation(false), 2500);
+  };
+
+  const copyPageText = () => {
+    navigator.clipboard.writeText(displaySnippet);
+    setCopiedText(true);
+    if (onShowToast) onShowToast('Teks naskah halaman berhasil disalin!');
+    setTimeout(() => setCopiedText(false), 2500);
+  };
+
+  const openNewTab = () => {
+    window.open(`/api/documents/${documentId}/file#page=${page}`, '_blank');
   };
 
   return (
@@ -62,39 +81,94 @@ export default function PdfViewerModal({
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, background: 'var(--brand-primary-light)', color: 'var(--brand-primary)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Identitas Dokumen Kiri */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+            <div style={{ 
+              width: 36, 
+              height: 36, 
+              background: '#0f172a', 
+              color: '#ffffff', 
+              borderRadius: 'var(--radius-md)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
               <FileText size={18} />
             </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--text-main)' }}>
-                {docDetails?.title || documentTitle}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '0.98rem', 
+                color: 'var(--text-main)', 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap' 
+              }} title={cleanTitle}>
+                {cleanTitle}
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Navigasi Presisi Halaman • SPMI STIKOM Yos Sudarso
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                STIKOM Yos Sudarso Purwokerto • Repositori Penjaminan Mutu Internal
               </div>
             </div>
           </div>
 
+          {/* Mode Switcher */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            background: 'var(--bg-subtle)', 
+            padding: 3, 
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <button 
+              className={`pdf-mode-pill ${viewMode === 'pdf' ? 'active' : ''}`}
+              onClick={() => setViewMode('pdf')}
+              title="Tampilkan Berkas Asli PDF"
+            >
+              <FileCheck size={14} />
+              <span>Naskah Asli PDF</span>
+            </button>
+            <button 
+              className={`pdf-mode-pill ${viewMode === 'transcript' ? 'active' : ''}`}
+              onClick={() => setViewMode('transcript')}
+              title="Tampilkan Transkrip Teks"
+            >
+              <AlignLeft size={14} />
+              <span>Transkrip Teks</span>
+            </button>
+          </div>
+
+          {/* Navigasi Halaman & Aksi Kanan */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Page navigation controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-tertiary)', padding: '3px 8px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 4, 
+              background: 'var(--bg-subtle)', 
+              padding: '3px 8px', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid var(--border-color)' 
+            }}>
               <button 
                 className="btn-feedback"
                 style={{ padding: '3px 6px' }}
                 disabled={page <= 1}
                 onClick={() => setPage(p => Math.max(1, p - 1))}
+                title="Halaman Sebelumnya"
               >
                 <ChevronLeft size={15} />
               </button>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, minWidth: '70px', textAlign: 'center' }}>
-                Halaman {page} / {maxPage}
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, minWidth: '78px', textAlign: 'center', color: 'var(--text-main)' }}>
+                Hlm. {page} / {maxPage}
               </span>
               <button 
                 className="btn-feedback"
                 style={{ padding: '3px 6px' }}
                 disabled={page >= maxPage}
                 onClick={() => setPage(p => Math.min(maxPage, p + 1))}
+                title="Halaman Selanjutnya"
               >
                 <ChevronRight size={15} />
               </button>
@@ -102,17 +176,18 @@ export default function PdfViewerModal({
 
             <button 
               className="btn-feedback"
-              onClick={copyCitation}
-              title="Salin Sitasi Resmi"
+              onClick={openNewTab}
+              title="Buka Dokumen PDF Penuh di Tab Baru"
+              style={{ padding: '5px 10px' }}
             >
-              {copiedSnippet ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
-              Sitasi
+              <ExternalLink size={14} />
+              <span>Tab Baru</span>
             </button>
 
             <button 
               className="btn-icon-control"
               onClick={onClose}
-              title="Tutup Viewer"
+              title="Tutup Pratinjau Dokumen"
             >
               <X size={18} />
             </button>
@@ -121,125 +196,207 @@ export default function PdfViewerModal({
 
         {/* Modal Body */}
         <div className="modal-body">
-          {/* Main Content Area */}
+          {/* Panel Kiri: Embedded PDF Asli atau Transkrip */}
           <div className="pdf-preview-main">
-            {/* Target Highlight Banner */}
-            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <span className="badge badge-page">
-                  Kutipan Tersorot pada Halaman {page}
-                </span>
+            {viewMode === 'pdf' ? (
+              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <iframe 
+                  key={`${documentId}-${page}`}
+                  src={pdfUrl} 
+                  className="pdf-embed-frame"
+                  title={`Naskah Asli ${cleanTitle} Halaman ${page}`}
+                />
+                <div style={{ 
+                  background: '#0f172a', 
+                  color: '#94a3b8', 
+                  fontSize: '0.73rem', 
+                  padding: '6px 14px', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center' 
+                }}>
+                  <span>Menampilkan lembar PDF resmi • STIKOM Yos Sudarso</span>
+                  <span>Navigasikan halaman via bilah atas atau kontrol PDF browser</span>
+                </div>
+              </div>
+            ) : (
+              /* Transkrip Naskah */
+              <div className="pdf-transcript-view">
+                <div style={{ 
+                  borderBottom: '2px solid #0f172a', 
+                  paddingBottom: '0.75rem', 
+                  marginBottom: '1.25rem', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'flex-end' 
+                }}>
+                  <div>
+                    <div style={{ fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.05em', color: '#0369a1', textTransform: 'uppercase' }}>
+                      STIKOM YOS SUDARSO PURWOKERTO
+                    </div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a' }}>
+                      SISTEM PENJAMINAN MUTU INTERNAL (SPMI)
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
+                    Halaman {page} dari {maxPage}
+                  </div>
+                </div>
+
                 {activeChunk?.section_title && (
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--brand-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Bookmark size={13} />
-                    {activeChunk.section_title}
-                  </span>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 6, 
+                    fontSize: '0.86rem', 
+                    fontWeight: 700, 
+                    color: '#0f172a', 
+                    marginBottom: '1rem',
+                    background: '#f8fafc',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <Bookmark size={14} color="#0284c7" />
+                    <span>{activeChunk.section_title}</span>
+                  </div>
                 )}
+
+                <div style={{ 
+                  fontSize: '0.88rem', 
+                  lineHeight: 1.8, 
+                  color: '#334155', 
+                  whiteSpace: 'pre-wrap', 
+                  background: '#f8fafc', 
+                  padding: '1.5rem', 
+                  borderRadius: 6, 
+                  border: '1px solid #e2e8f0',
+                  marginBottom: '1.25rem'
+                }}>
+                  {displaySnippet}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button 
+                    className="btn-dossier-action btn-dossier-secondary"
+                    style={{ width: 'auto', padding: '6px 14px' }}
+                    onClick={copyPageText}
+                  >
+                    {copiedText ? <Check size={14} color="#16a34a" /> : <Copy size={14} />}
+                    <span>{copiedText ? 'Teks Berhasil Disalin' : 'Salin Teks Halaman Ini'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Panel Kanan: Verifikasi Legalitas & Kutipan */}
+          <div className="pdf-sidebar-meta">
+            {/* Header Sidebar */}
+            <div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                fontSize: '0.92rem', 
+                fontWeight: 700, 
+                color: 'var(--text-main)', 
+                marginBottom: '0.2rem' 
+              }}>
+                <ShieldCheck size={17} color="#0284c7" />
+                <span>Verifikasi Dokumen SPMI</span>
+              </div>
+              <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                Metadata legalitas & bukti otentikasi naskah
+              </div>
+            </div>
+
+            {/* Kartu Metadata Resmi */}
+            <div className="dossier-meta-card">
+              <div className="dossier-meta-item">
+                <span className="dossier-label">Judul Resmi Dokumen</span>
+                <span className="dossier-val">{cleanTitle}</span>
               </div>
 
-              <div style={{ fontSize: '0.92rem', lineHeight: 1.7, color: 'var(--text-main)', background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--brand-primary)', whiteSpace: 'pre-wrap' }}>
+              <div className="dossier-meta-item">
+                <span className="dossier-label">Nomor Ketetapan / SK</span>
+                <span className="dossier-val" style={{ fontFamily: 'monospace', color: '#0369a1' }}>
+                  {docDetails?.doc_number || 'Tercatat dalam Sistem SPMI'}
+                </span>
+              </div>
+
+              <div className="dossier-meta-item">
+                <span className="dossier-label">Kategori Dokumen Mutu</span>
+                <div>
+                  <span className="badge badge-category" style={{ display: 'inline-block', marginTop: 2 }}>
+                    {docDetails?.category_name || 'Standar SPMI'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="dossier-meta-item">
+                  <span className="dossier-label">Tahun Penerbitan</span>
+                  <span className="dossier-val">{docDetails?.year || '-'}</span>
+                </div>
+                <div className="dossier-meta-item">
+                  <span className="dossier-label">Edisi / Versi</span>
+                  <span className="dossier-val">Edisi v{docDetails?.version || '1.0'}</span>
+                </div>
+              </div>
+
+              <div className="dossier-meta-item">
+                <span className="dossier-label">Status Keabsahan</span>
+                <div>
+                  <span className="badge badge-similarity-high" style={{ display: 'inline-block', marginTop: 2 }}>
+                    Aktif & Diberlakukan
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Kutipan Klausul Kunci */}
+            <div>
+              <div style={{ 
+                fontSize: '0.75rem', 
+                fontWeight: 700, 
+                color: 'var(--text-muted)', 
+                textTransform: 'uppercase', 
+                letterSpacing: '0.04em', 
+                marginBottom: '0.45rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>Kutipan Klausul Relevan</span>
+                <span style={{ fontSize: '0.72rem', color: '#0284c7', textTransform: 'none', fontWeight: 600 }}>
+                  Halaman {page}
+                </span>
+              </div>
+              <div className="dossier-quote-box">
                 {displaySnippet}
               </div>
             </div>
 
-            {/* Document Sheet Simulation */}
-            <div style={{ background: '#ffffff', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)', padding: '2.5rem 3rem', boxShadow: 'var(--shadow-md)', minHeight: '400px', position: 'relative' }}>
-              <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '0.75rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.05em', color: '#0369a1', textTransform: 'uppercase' }}>
-                    STIKOM YOS SUDARSO PURWOKERTO
-                  </div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
-                    SISTEM PENJAMINAN MUTU INTERNAL (SPMI)
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  No: {docDetails?.doc_number || 'PED-SDM/SYS/2024'}
-                </div>
-              </div>
+            {/* Tombol Aksi Auditor */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: 'auto' }}>
+              <button 
+                type="button"
+                className="btn-dossier-action btn-dossier-primary"
+                onClick={copyCitation}
+              >
+                {copiedCitation ? <Check size={15} color="#4ade80" /> : <Copy size={15} />}
+                <span>{copiedCitation ? 'Sitasi Tersalin!' : 'Salin Sitasi Borang Akreditasi'}</span>
+              </button>
 
-              <div style={{ fontSize: '0.85rem', lineHeight: 1.8, color: '#334155' }}>
-                <p style={{ marginBottom: '1rem', fontStyle: 'italic', color: '#64748b' }}>
-                  [Tampilan Lembar Resmi Naskah Asli • Halaman {page} dari {maxPage}]
-                </p>
-                <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-                  {displaySnippet}
-                </div>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'justify' }}>
-                  Seluruh klausul dan ketentuan di atas mengikat bagi seluruh unit kerja dan civitas akademika STIKOM Yos Sudarso. Dokumen ini telah diverifikasi dan disahkan oleh Tim Auditor Mutu Internal (AMI) dan Pimpinan Institusi.
-                </p>
-              </div>
-
-              <div style={{ position: 'absolute', bottom: '1.25rem', right: '3rem', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
-                Halaman {page}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Sidebar Metadata */}
-          <div className="pdf-sidebar-meta">
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ShieldCheck size={16} color="var(--brand-primary)" />
-              Metadata Verifikasi Dokumen
-            </h4>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.82rem' }}>
-              <div>
-                <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>JUDUL RESMI</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                  {docDetails?.title || documentTitle}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>NOMOR DOKUMEN / SK</span>
-                <span style={{ fontFamily: 'monospace', color: 'var(--brand-primary)', fontWeight: 600 }}>
-                  {docDetails?.doc_number || '-'}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>KATEGORI SPMI</span>
-                <span className="badge badge-category" style={{ marginTop: 3 }}>
-                  {docDetails?.category_name || 'Standar SPMI'}
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <div>
-                  <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>TAHUN</span>
-                  <span style={{ fontWeight: 600 }}>{docDetails?.year || '-'}</span>
-                </div>
-                <div>
-                  <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>VERSI</span>
-                  <span style={{ fontWeight: 600 }}>v{docDetails?.version || '1.0'}</span>
-                </div>
-              </div>
-
-              <div>
-                <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>CHECKSUM SHA-256</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'var(--text-muted)', wordBreak: 'break-all', display: 'block', background: 'var(--bg-tertiary)', padding: '4px 6px', borderRadius: 4, marginTop: 3 }}>
-                  {docDetails?.checksum_sha256 || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
-                </span>
-              </div>
-
-              <div>
-                <span style={{ color: 'var(--text-subtle)', display: 'block', fontSize: '0.75rem', fontWeight: 700 }}>STATUS KORPUS</span>
-                <span className="badge badge-similarity-high" style={{ marginTop: 3 }}>
-                  Tervalidasi & Published
-                </span>
-              </div>
-
-              <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <button 
-                  className="btn-open-pdf" 
-                  style={{ width: '100%', justifyContent: 'center' }}
-                  onClick={copyCitation}
-                >
-                  <Copy size={14} />
-                  Salin Bukti Sitasi Audit
-                </button>
-              </div>
+              <button 
+                type="button"
+                className="btn-dossier-action btn-dossier-secondary"
+                onClick={() => window.open(`/api/documents/${documentId}/file`, '_blank')}
+              >
+                <Download size={15} />
+                <span>Unduh Berkas Asli (PDF)</span>
+              </button>
             </div>
           </div>
         </div>
