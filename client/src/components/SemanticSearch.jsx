@@ -43,8 +43,8 @@ export const highlightQuery = (text, query) => {
   }
 };
 
-export default function SemanticSearch({ onOpenViewer, onShowToast }) {
-  const [query, setQuery] = useState('');
+export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery = '' }) {
+  const [query, setQuery] = useState(initialQuery || '');
   const [categoryId, setCategoryId] = useState('');
   const [year, setYear] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,6 +52,13 @@ export default function SemanticSearch({ onOpenViewer, onShowToast }) {
   const [ragAnswer, setRagAnswer] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState({});
+
+  React.useEffect(() => {
+    if (initialQuery && initialQuery.trim()) {
+      setQuery(initialQuery);
+      handleSearch(null, initialQuery);
+    }
+  }, [initialQuery]);
 
   const handleSearch = async (e, customQuery) => {
     if (e) e.preventDefault();

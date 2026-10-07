@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
+import SirenaDashboard from './components/SirenaDashboard';
 import SemanticSearch from './components/SemanticSearch';
 import DocumentArchive from './components/DocumentArchive';
 import IngestionUploader from './components/IngestionUploader';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import SupabaseConfigGuide from './components/SupabaseConfigGuide';
 import PdfViewerModal from './components/PdfViewerModal';
-import { CheckCircle2, ShieldCheck } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('search');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [userRole, setUserRole] = useState('dosen');
-  const [theme, setTheme] = useState(() => localStorage.getItem('sandi_theme') || 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('sirena_theme') || 'light');
   const [toastMsg, setToastMsg] = useState(null);
-  
+  const [initialSearchQuery, setInitialSearchQuery] = useState('');
+
   // PDF Viewer Modal State
   const [viewerState, setViewerState] = useState({
     isOpen: false,
@@ -26,7 +30,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('sandi_theme', theme);
+    localStorage.setItem('sirena_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -55,54 +59,79 @@ export default function App() {
     setViewerState(prev => ({ ...prev, isOpen: false }));
   };
 
+  const handleDirectSearch = (query) => {
+    setInitialSearchQuery(query);
+    setActiveTab('search');
+  };
+
   return (
-    <div className="app-container">
-      {/* Header & Navigation */}
-      <Navbar 
+    <div className="sirena-layout">
+      {/* SIRENA Left Sidebar from Image 2 */}
+      <Sidebar 
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        isCollapsed={isSidebarCollapsed}
         userRole={userRole}
-        setUserRole={setUserRole}
-        theme={theme}
-        toggleTheme={toggleTheme}
       />
 
-      {/* Main Content View */}
-      <main className="main-content">
-        {activeTab === 'search' && (
-          <SemanticSearch 
-            onOpenViewer={handleOpenViewer}
-            onShowToast={showToast}
-          />
-        )}
+      {/* Main Content Area */}
+      <div className="sirena-main-container">
+        {/* SIRENA Top Bar from Image 2 */}
+        <Topbar 
+          onToggleSidebar={() => setIsSidebarCollapsed(prev => !prev)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          userRole={userRole}
+          onRoleChange={setUserRole}
+          onRefresh={() => window.location.reload()}
+        />
 
-        {activeTab === 'archive' && (
-          <DocumentArchive 
-            onOpenViewer={handleOpenViewer}
-            onShowToast={showToast}
-            userRole={userRole}
-          />
-        )}
+        {/* Scrollable Content Body */}
+        <main className="sirena-content-scroll">
+          {activeTab === 'dashboard' && (
+            <SirenaDashboard 
+              onNavigateTab={setActiveTab}
+              onOpenViewer={handleOpenViewer}
+              onDirectSearch={handleDirectSearch}
+            />
+          )}
 
-        {activeTab === 'upload' && (
-          <IngestionUploader 
-            onShowToast={showToast}
-            onDocumentUploaded={() => setActiveTab('archive')}
-          />
-        )}
+          {activeTab === 'search' && (
+            <SemanticSearch 
+              initialQuery={initialSearchQuery}
+              onOpenViewer={handleOpenViewer}
+              onShowToast={showToast}
+            />
+          )}
 
-        {activeTab === 'analytics' && (
-          <AnalyticsDashboard 
-            onShowToast={showToast}
-          />
-        )}
+          {activeTab === 'archive' && (
+            <DocumentArchive 
+              onOpenViewer={handleOpenViewer}
+              onShowToast={showToast}
+              userRole={userRole}
+            />
+          )}
 
-        {activeTab === 'config' && (
-          <SupabaseConfigGuide 
-            onShowToast={showToast}
-          />
-        )}
-      </main>
+          {activeTab === 'upload' && (
+            <IngestionUploader 
+              onShowToast={showToast}
+              onDocumentUploaded={() => setActiveTab('archive')}
+            />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AnalyticsDashboard 
+              onShowToast={showToast}
+            />
+          )}
+
+          {activeTab === 'config' && (
+            <SupabaseConfigGuide 
+              onShowToast={showToast}
+            />
+          )}
+        </main>
+      </div>
 
       {/* PDF Viewer Modal */}
       {viewerState.isOpen && (
@@ -120,26 +149,10 @@ export default function App() {
       {/* Global Toast Notification */}
       {toastMsg && (
         <div className="toast-notice">
-          <CheckCircle2 size={16} color="var(--brand-primary)" />
+          <CheckCircle2 size={16} color="var(--primary-purple)" />
           <span>{toastMsg}</span>
         </div>
       )}
-
-      {/* Institutional Footer */}
-      <footer className="footer">
-        <div className="footer-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShieldCheck size={16} color="var(--brand-primary)" />
-            <span>
-              <strong>SANDI (Sistem Arsip & Navigasi Dokumen Internal)</strong> • Lembaga Penjaminan Mutu (LPM)
-            </span>
-          </div>
-
-          <div>
-            STIKOM Yos Sudarso Purwokerto • Terintegrasi dengan Supabase & Google Gemini AI
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
