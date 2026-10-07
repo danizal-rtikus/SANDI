@@ -23,7 +23,8 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchData = () => {
+    setLoading(true);
     Promise.all([
       fetch('/api/analytics/summary').then(r => r.json()).catch(() => null),
       fetch('/api/documents').then(r => r.json()).catch(() => [])
@@ -32,6 +33,10 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
       setDocuments(d || []);
       setLoading(false);
     });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   const handleQuickSubmit = (e) => {
