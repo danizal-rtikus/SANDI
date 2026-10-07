@@ -15,13 +15,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 
-const samplePrompts = [
-  "aturan pemberian reward dan insentif publikasi dosen",
-  "syarat angka kredit kenaikan jabatan ke Lektor 200",
-  "berapa standar beban kerja mengajar SKS dosen per semester?",
-  "prosedur audit mutu internal AMI dan siklus PPEPP",
-  "tugas pokok dan wewenang Lembaga Penjaminan Mutu (LPM)"
-];
+
 
 export const highlightQuery = (text, query) => {
   if (!query || !text) return text;
@@ -52,6 +46,22 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
   const [ragAnswer, setRagAnswer] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState({});
+  const [popularQueries, setPopularQueries] = useState([
+    "Apa luas lingkup penjaminan mutu SPMI di STIKOM Yos Sudarso?",
+    "Statuta dan landasan hukum yang dirujuk dalam Kebijakan SPMI",
+    "Bagaimana prosedur audit mutu internal (AMI) dan siklus PPEPP?"
+  ]);
+
+  React.useEffect(() => {
+    fetch('/api/suggested-queries')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setPopularQueries(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     if (initialQuery && initialQuery.trim()) {
@@ -183,7 +193,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
         {/* Suggestion Prompt Chips */}
         <div className="sample-queries-wrap">
           <span className="sample-queries-label">Pertanyaan Populer:</span>
-          {samplePrompts.map((p, idx) => (
+          {popularQueries.map((p, idx) => (
             <button 
               key={idx} 
               className="sample-query-chip"

@@ -22,15 +22,20 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
   const [summary, setSummary] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [suggestedQueries, setSuggestedQueries] = useState([]);
 
   const fetchData = () => {
     setLoading(true);
     Promise.all([
       fetch('/api/analytics/summary').then(r => r.json()).catch(() => null),
-      fetch('/api/documents').then(r => r.json()).catch(() => [])
-    ]).then(([s, d]) => {
+      fetch('/api/documents').then(r => r.json()).catch(() => []),
+      fetch('/api/suggested-queries').then(r => r.json()).catch(() => [])
+    ]).then(([s, d, q]) => {
       setSummary(s);
       setDocuments(d || []);
+      if (Array.isArray(q) && q.length > 0) {
+        setSuggestedQueries(q);
+      }
       setLoading(false);
     });
   };
@@ -169,31 +174,26 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
         </form>
 
         <div className="sample-queries-wrap">
-          <span className="sample-queries-label">Contoh Cepat:</span>
-          <button 
-            className="sample-query-chip"
-            onClick={() => onDirectSearch('aturan pemberian reward dan insentif publikasi dosen')}
-          >
-            Reward & Insentif Dosen
-          </button>
-          <button 
-            className="sample-query-chip"
-            onClick={() => onDirectSearch('syarat angka kredit kenaikan jabatan ke Lektor 200')}
-          >
-            Kenaikan Jabatan Lektor
-          </button>
-          <button 
-            className="sample-query-chip"
-            onClick={() => onDirectSearch('berapa standar beban kerja mengajar SKS dosen per semester?')}
-          >
-            Beban SKS Mengajar
-          </button>
-          <button 
-            className="sample-query-chip"
-            onClick={() => onDirectSearch('prosedur audit mutu internal AMI dan siklus PPEPP')}
-          >
-            Siklus PPEPP & Audit AMI
-          </button>
+          <span className="sample-queries-label">Rekomendasi Penelusuran:</span>
+          {suggestedQueries.length > 0 ? (
+            suggestedQueries.slice(0, 5).map((q, idx) => (
+              <button 
+                key={idx} 
+                className="sample-query-chip"
+                onClick={() => onDirectSearch(q)}
+                title={q}
+              >
+                {q.length > 42 ? q.slice(0, 40) + '...' : q}
+              </button>
+            ))
+          ) : (
+            <button 
+              className="sample-query-chip"
+              onClick={() => onDirectSearch('Apa luas lingkup penjaminan mutu SPMI di STIKOM Yos Sudarso?')}
+            >
+              Luas Lingkup SPMI STIKOM
+            </button>
+          )}
         </div>
       </div>
 

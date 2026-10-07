@@ -437,6 +437,66 @@ app.get('/api/analytics/unanswered', async (req, res) => {
   }
 });
 
+// GET /api/suggested-queries (Daftar pertanyaan populer dinamis sesuai dokumen aktif)
+app.get('/api/suggested-queries', async (req, res) => {
+  try {
+    const docs = await dbStore.getDocuments();
+    const suggestions = [];
+
+    // 1. Ambil dari riwayat penelusuran nyata yang berhasil dijawab
+    const logs = dbStore.searchLogs || [];
+    logs
+      .filter(l => l.answered && l.query_text && l.query_text.trim().length > 5)
+      .slice(0, 5)
+      .forEach(l => {
+        const q = l.query_text.trim();
+        if (!suggestions.includes(q)) {
+          suggestions.push(q);
+        }
+      });
+
+    // 2. Ekstrak pertanyaan kontekstual dari dokumen nyata yang terunggah di korpus
+    docs.forEach(doc => {
+      const cat = (doc.category_name || '').toLowerCase();
+      const rawTitle = (doc.title || '').replace(/^\d+[\s._-]+/, '').trim(); // Hilangkan prefix angka seperti '23 ', '01 '
+      if (!rawTitle) return;
+
+      if (cat.includes('kebijakan') || rawTitle.toLowerCase().includes('kebijakan')) {
+        suggestions.push('Apa luas lingkup penjaminan mutu SPMI di STIKOM Yos Sudarso?');
+        suggestions.push('Statuta dan landasan hukum yang dirujuk dalam Kebijakan SPMI');
+      } else if (cat.includes('manual') || rawTitle.toLowerCase().includes('manual')) {
+        suggestions.push('Bagaimana prosedur audit mutu internal (AMI) dan siklus PPEPP?');
+      } else if (cat.includes('standar') || rawTitle.toLowerCase().includes('standar')) {
+        suggestions.push(`Apa saja standar mutu yang diatur dalam ${rawTitle}?`);
+      } else if (cat.includes('sop') || rawTitle.toLowerCase().includes('sop')) {
+        suggestions.push(`Bagaimana alur dan prosedur baku dalam ${rawTitle}?`);
+      } else if (rawTitle.toLowerCase().includes('rip') || rawTitle.toLowerCase().includes('peta jalan')) {
+        suggestions.push(`Bagaimana arah sasaran dan tahapan dalam ${rawTitle}?`);
+      } else if (cat.includes('pedoman') || rawTitle.toLowerCase().includes('pedoman')) {
+        suggestions.push(`Ketentuan dan tata tertib yang diatur dalam ${rawTitle}`);
+      } else if (cat.includes('formulir') || rawTitle.toLowerCase().includes('instrumen')) {
+        suggestions.push(`Format borang dan instrumen dalam ${rawTitle}`);
+      } else {
+        suggestions.push(`Ketentuan dan isi dokumen ${rawTitle}`);
+      }
+    });
+
+    // 3. Fallback jika korpus kosong
+    if (suggestions.length === 0) {
+      suggestions.push(
+        'aturan pemberian reward dan insentif publikasi dosen',
+        'syarat angka kredit kenaikan jabatan ke Lektor 200',
+        'prosedur audit mutu internal AMI dan siklus PPEPP'
+      );
+    }
+
+    const unique = [...new Set(suggestions)].slice(0, 6);
+    res.json(unique);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`🚀 Server SANDI (STIKOM Yos Sudarso) aktif di port ${PORT}`);
