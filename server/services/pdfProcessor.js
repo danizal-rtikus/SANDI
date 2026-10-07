@@ -1,5 +1,20 @@
 import crypto from 'crypto';
 import pdfParse from 'pdf-parse';
+import Tesseract from 'tesseract.js';
+
+/**
+ * Melakukan OCR pada citra/gambar buffer (Bahasa Indonesia & Inggris)
+ * Digunakan jika halaman PDF merupakan hasil scan dokumen fisik
+ */
+export async function performOcr(buffer) {
+  try {
+    const { data: { text } } = await Tesseract.recognize(buffer, 'ind+eng');
+    return cleanText(text);
+  } catch (err) {
+    console.warn('⚠️ OCR fallback error:', err.message);
+    return '';
+  }
+}
 
 /**
  * Menghitung checksum SHA-256 dari buffer file PDF
