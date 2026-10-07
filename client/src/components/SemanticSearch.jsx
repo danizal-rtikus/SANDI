@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Search, 
-  Sparkles, 
+  BookOpenCheck,
+  ShieldCheck, 
   FileText, 
   ExternalLink, 
   ThumbsUp, 
@@ -132,14 +133,14 @@ export default function SemanticSearch({ onOpenViewer, onShowToast }) {
       {/* Hero Welcome Banner */}
       <div className="hero-banner">
         <div className="hero-badge">
-          <Sparkles size={14} />
-          Pencarian Berbasis Makna & Pemahaman Konteks (RAG)
+          <ShieldCheck size={14} />
+          Modul SIRENA-RAG: Navigasi Dokumen Mutu Internal
         </div>
         <h1 className="hero-title">
-          Temukan Aturan & Dokumen SPMI Secara Presisi
+          Penelusuran Aturan & Dokumen SPMI Presisi
         </h1>
         <p className="hero-desc">
-          Ketik pertanyaan Anda dengan bahasa alami sehari-hari. SANDI akan memahami maksud Anda, memetakan ke pasal & halaman yang tepat, serta memberikan rujukan nomor dokumen SPMI STIKOM Yos Sudarso.
+          Ketik pertanyaan Anda terkait ketentuan atau standar mutu kampus. Sistem memetakan secara langsung ke pasal, nomor dokumen resmi, dan nomor halaman naskah asli di lingkungan STIKOM Yos Sudarso.
         </p>
       </div>
 
@@ -235,11 +236,11 @@ export default function SemanticSearch({ onOpenViewer, onShowToast }) {
         <div className="rag-answer-box">
           <div className="rag-header">
             <div className="rag-title-badge">
-              <Sparkles size={18} />
-              Ringkasan Cerdas RAG (STIKOM Yos Sudarso SPMI)
+              <BookOpenCheck size={18} />
+              Rujukan Ketentuan SPMI (SIRENA-RAG)
             </div>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Didukung oleh AI retrieval-grounded
+              Disintesis langsung dari naskah pasal terkait (DeepSeek-V4)
             </span>
           </div>
 

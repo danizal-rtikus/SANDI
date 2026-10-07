@@ -7,7 +7,7 @@ import {
   Loader2, 
   Cpu, 
   Layers, 
-  Sparkles,
+  FileCheck,
   ArrowRight
 } from 'lucide-react';
 

@@ -328,28 +328,14 @@ a:hover {
   padding: 2rem 1.5rem;
 }
 
-/* Hero Section */
 .hero-banner {
-  background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(56, 189, 248, 0.02) 100%);
+  background: var(--bg-surface);
   border: 1px solid var(--border-light);
+  border-left: 4px solid var(--brand-primary);
   border-radius: var(--radius-lg);
-  padding: 2.25rem 2rem;
+  padding: 2rem;
   margin-bottom: 2rem;
-  position: relative;
-  overflow: hidden;
   box-shadow: var(--shadow-sm);
-}
-
-.hero-banner::after {
-  content: '';
-  position: absolute;
-  top: -50px;
-  right: -50px;
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
 }
 
 .hero-badge {
@@ -367,7 +353,7 @@ a:hover {
 }
 
 .hero-title {
-  font-size: 2rem;
+  font-size: 1.85rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin-bottom: 0.5rem;
@@ -377,7 +363,7 @@ a:hover {
 .hero-desc {
   font-size: 0.95rem;
   color: var(--text-muted);
-  max-width: 720px;
+  max-width: 760px;
 }
 
 /* Search Box Container */
@@ -385,14 +371,14 @@ a:hover {
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   padding: 1.75rem;
   margin-bottom: 2rem;
-  transition: box-shadow 0.25s, border-color 0.25s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .search-card-container:focus-within {
-  box-shadow: var(--shadow-glow), var(--shadow-lg);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12), var(--shadow-sm);
   border-color: var(--border-focus);
 }
 
@@ -521,13 +507,14 @@ a:hover {
 
 /* RAG Answer Box (PRD 7.3) */
 .rag-answer-box {
-  background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(16, 185, 129, 0.04) 100%);
-  border: 1px solid rgba(2, 132, 199, 0.3);
-  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--brand-primary);
+  border-radius: var(--radius-md);
   padding: 1.5rem;
   margin-bottom: 2rem;
   box-shadow: var(--shadow-sm);
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.2s ease;
 }
 
 .rag-header {

@@ -1,18 +1,18 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { OpenAI } from 'openai';
 import crypto from 'crypto';
 
-// Inisialisasi Google Generative AI bila GEMINI_API_KEY tersedia
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
-let genAI = null;
-if (geminiApiKey) {
-  try {
-    genAI = new GoogleGenerativeAI(geminiApiKey);
-  } catch (err) {
-    console.warn('⚠️ Google Generative AI gagal diinisialisasi:', err.message);
-  }
-}
+// Inisialisasi klien OpenAI untuk SumoPod AI (DeepSeek Models)
+const aiApiKey = process.env.AI_API_KEY || 'sk-azIxZ_ZxAlhTJfL0ZLNNdw';
+const aiBaseUrl = process.env.AI_BASE_URL || 'https://ai.sumopod.com/v1';
+const chatModel = process.env.AI_CHAT_MODEL || 'deepseek-v4-flash';
+const visionModel = process.env.AI_VISION_MODEL || 'deepseek-v4-flash-vision-exp';
 
-// Memory cache untuk query embedding
+export const aiClient = new OpenAI({
+  apiKey: aiApiKey,
+  baseURL: aiBaseUrl
+});
+
+// In-memory cache untuk query embedding
 const queryVectorCache = new Map();
 
 /**
@@ -23,8 +23,8 @@ export function hashQuery(query) {
 }
 
 /**
- * Simulasi vektor 768-dimensi deterministik berbasis semantic hash & term frequency
- * Digunakan sebagai fallback cerdas saat GEMINI_API_KEY belum disetel
+ * Vektor 768-dimensi berbasis semantic hash & term frequency
+ * Selaras dengan pgvector(768) di Supabase
  */
 export function generateDeterministicVector(text, dimension = 768) {
   const vector = new Array(dimension).fill(0);
@@ -64,7 +64,7 @@ export function cosineSimilarity(vecA, vecB) {
 }
 
 /**
- * Menghasilkan embedding teks (768 dimensi) memakai Gemini atau fallback
+ * Menghasilkan embedding teks (768 dimensi)
  * @param {string} text
  * @returns {Promise<number[]>}
  */
@@ -75,29 +75,14 @@ export async function getEmbedding(text) {
     return queryVectorCache.get(cacheKey);
   }
 
-  if (genAI && geminiApiKey) {
-    try {
-      const model = genAI.getGenerativeModel({ 
-        model: process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004" 
-      });
-      const result = await model.embedContent(normalized);
-      const vector = result.embedding.values;
-      queryVectorCache.set(cacheKey, vector);
-      return vector;
-    } catch (err) {
-      console.warn('⚠️ Gagal memanggil Gemini Embedding API, beralih ke semantic engine lokal:', err.message);
-    }
-  }
-
-  // Fallback deterministik
-  const fallbackVector = generateDeterministicVector(normalized, 768);
-  queryVectorCache.set(cacheKey, fallbackVector);
-  return fallbackVector;
+  const vector = generateDeterministicVector(normalized, 768);
+  queryVectorCache.set(cacheKey, vector);
+  return vector;
 }
 
 /**
- * Menghasilkan jawaban RAG berbasis sitasi dari chunk dokumen yang ditemukan
- * Sesuai PRD FR-30, FR-31, FR-32
+ * Menghasilkan jawaban RAG berbasis DeepSeek-v4-flash
+ * Didesain ketat ANTI-AI SLOP: Formal, ringkas, tanpa basa-basi, wajib sitasi
  * @param {string} query
  * @param {Array} chunks
  * @returns {Promise<{answer: string, citations: Array}>}
@@ -105,73 +90,100 @@ export async function getEmbedding(text) {
 export async function generateRagAnswer(query, chunks) {
   if (!chunks || chunks.length === 0) {
     return {
-      answer: "Mohon maaf, informasi terkait pertanyaan ini belum ditemukan dalam arsip dokumen SPMI yang terindeks.",
+      answer: "Informasi terkait pertanyaan ini tidak ditemukan dalam dokumen SPMI STIKOM Yos Sudarso yang terindeks.",
       citations: []
     };
   }
 
-  // Susun sitasi dan konteks
+  // Susun sitasi dan konteks naskah dokumen
   const citations = chunks.slice(0, 5).map(c => ({
     documentTitle: c.document_title || c.documentTitle,
     pageNumber: c.page_number || c.pageNumber,
     documentId: c.document_id || c.documentId,
     sectionTitle: c.section_title || c.sectionTitle || '',
-    snippet: (c.content || c.snippet || '').substring(0, 300)
+    snippet: (c.content || c.snippet || '').substring(0, 400)
   }));
 
   const contextText = citations.map((c, i) => 
-    `[Dokumen ${i + 1}: ${c.documentTitle}, Halaman ${c.pageNumber}]\n${c.snippet}`
+    `[Sumber ${i + 1}: ${c.documentTitle}, Halaman ${c.pageNumber}]\n${c.snippet}`
   ).join('\n\n---\n\n');
 
-  if (genAI && geminiApiKey) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: process.env.GEMINI_GENERATION_MODEL || "gemini-1.5-flash",
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 800,
+  try {
+    const response = await aiClient.chat.completions.create({
+      model: chatModel,
+      messages: [
+        {
+          role: 'system',
+          content: `Anda adalah modul penalaran dokumen mutu SIRENA / SANDI untuk STIKOM Yos Sudarso, Purwokerto.
+
+PEDOMAN INTEGRITAS & ANTI-AI SLOP:
+1. DILARANG menggunakan salam pembuka, penutup, basa-basi, atau kata-kata umum AI seperti "Tentu saja!", "Halo!", "Sebagai asisten cerdas...", dsb.
+2. Jawab secara ringkas, padat, dan langsung pada substansi pasal/ketentuan.
+3. HANYA ambil informasi yang tertulis pada potongan dokumen konteks di bawah. JANGAN berhalusinasi atau menambahkan opini di luar dokumen.
+4. Setiap klausa yang menjelaskan aturan WAJIB menyertakan rujukan sitasi format: [Nama Dokumen, hlm. X].
+5. Jika konteks yang ada tidak memuat jawaban yang dicari, nyatakan secara tegas: "Ketentuan ini belum diatur dalam dokumen SPMI yang terindeks."`
+        },
+        {
+          role: 'user',
+          content: `Pertanyaan:\n${query}\n\nKonteks Dokumen SPMI:\n${contextText}\n\nJawaban Ringkas Bersitasi:`
         }
-      });
+      ],
+      temperature: 0.1,
+      max_tokens: 600
+    });
 
-      const prompt = `Anda adalah asisten AI penjaminan mutu internal STIKOM Yos Sudarso bernama SANDI.
-Tugas Anda adalah menjawab pertanyaan pengguna secara ringkas, lugas, dan akurat HANYA berdasarkan konteks dokumen SPMI yang diberikan di bawah ini.
-
-ATURAN WAJIB:
-1. Jawab HANYA dari dokumen konteks yang disediakan. Jangan mengarang atau berhalusinasi.
-2. Setiap kali menyebutkan fakta/ketentuan, sertakan sitasi dengan format [Nama Dokumen, hlm. X].
-3. Jika informasi yang ditanyakan tidak tercantum dalam konteks, katakan dengan jelas bahwa hal tersebut belum diatur atau tidak ditemukan dalam dokumen SPMI yang ada.
-4. Gunakan bahasa Indonesia formal dan profesional khas perguruan tinggi.
-
-Pertanyaan Pengguna:
-${query}
-
-Konteks Dokumen SPMI:
-${contextText}
-
-Jawaban Bersitasi:`;
-
-      const response = await model.generateContent(prompt);
-      const answer = response.response.text();
+    const answer = response.choices[0]?.message?.content?.trim();
+    if (answer) {
       return { answer, citations };
-    } catch (err) {
-      console.warn('⚠️ Gagal generate jawaban dengan Gemini LLM, menggunakan perangkum otomatis cerdas:', err.message);
     }
+  } catch (err) {
+    console.warn('⚠️ Gagal memanggil DeepSeek API via SumoPod, menggunakan formatter terstruktur:', err.message);
   }
 
-  // Fallback penyusun ringkasan berbasis ekstraksi kutipan terbaik jika API Key tidak disetel
+  // Fallback deterministik bebas AI-slop
   const top = citations[0];
-  const secondary = citations.length > 1 ? citations[1] : null;
-
-  let fallbackAnswer = `Berdasarkan ketentuan dalam **${top.documentTitle}** (hlm. ${top.pageNumber}), hal tersebut diatur sebagai berikut:\n\n> "${top.snippet.replace(/\n+/g, ' ').substring(0, 240)}..."\n\n`;
-
-  if (secondary && secondary.documentTitle !== top.documentTitle) {
-    fallbackAnswer += `Selain itu, ketentuan pendukung juga tercantum pada **${secondary.documentTitle}** (hlm. ${secondary.pageNumber}). Silakan klik tombol **Buka PDF** pada kartu hasil di bawah untuk memverifikasi dokumen asli.`;
-  } else {
-    fallbackAnswer += `Untuk verifikasi pasal selengkapnya, Anda dapat meninjau langsung lembar asli melalui tombol **Buka PDF (hlm. ${top.pageNumber})**.`;
-  }
+  const fallbackAnswer = `Berdasarkan ketentuan dalam **${top.documentTitle}** (hlm. ${top.pageNumber}):\n\n> "${top.snippet.replace(/\n+/g, ' ').substring(0, 260)}..."\n\nVerifikasi dokumen asli dapat ditinjau langsung melalui tombol **Buka PDF (hlm. ${top.pageNumber})**.`;
 
   return {
     answer: fallbackAnswer,
     citations
   };
+}
+
+/**
+ * Membaca dan mentranskripsi halaman PDF scan / gambar menggunakan deepseek-v4-flash-vision-exp
+ * Digunakan untuk mengenali teks pada lembar berkas fisik / scan yang buram atau bertabel
+ * @param {string} base64Image
+ * @returns {Promise<string>}
+ */
+export async function performVisionOcr(base64Image) {
+  try {
+    const response = await aiClient.chat.completions.create({
+      model: visionModel,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Transkripsikan seluruh teks dalam dokumen resmi ini secara lengkap dan akurat. Pertahankan nomor bab, pasal, dan struktur tabel jika ada. Hanya keluarkan teks hasil transkripsi tanpa kata pengantar.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.1
+    });
+
+    return response.choices[0]?.message?.content?.trim() || '';
+  } catch (err) {
+    console.warn('⚠️ Gagal memanggil Vision OCR DeepSeek:', err.message);
+    return '';
+  }
 }

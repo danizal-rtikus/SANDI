@@ -7,7 +7,7 @@ import {
   ShieldCheck, 
   Key, 
   Terminal, 
-  Sparkles,
+  Cpu,
   Server
 } from 'lucide-react';
 
@@ -187,7 +187,7 @@ $$;`;
 
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
             <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="var(--brand-primary)" />
+              <Cpu size={18} color="var(--brand-primary)" />
               Spesifikasi Vektor & Embedding (PRD 9.1)
             </h3>
             <ul style={{ paddingLeft: '1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.8 }}>
