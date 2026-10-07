@@ -106,13 +106,18 @@ export default function IngestionUploader({ onShowToast, onDocumentUploaded }) {
 
   return (
     <div>
-      <div style={{ marginBottom: '1.75rem' }}>
-        <h2 style={{ fontSize: '1.6rem', marginBottom: '0.35rem' }}>
-          Pipeline Ingest & Indeksasi Dokumen SPMI
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Unggah naskah kebijakan, standar, atau SOP mutu terbaru. Pipeline otomatis akan mengekstrak teks tiap halaman, mendeteksi noise/scan, melakukan chunking token, dan meng-generate vektor embedding (768 dimensi).
-        </p>
+      <div className="dashboard-header-block">
+        <div>
+          <div className="dashboard-heading-title">
+            Pipeline Ingest & Indeksasi Dokumen SPMI
+            <span className="heading-tag-purple">
+              Admin Mutu — Lembaga Penjaminan Mutu
+            </span>
+          </div>
+          <div className="dashboard-heading-desc">
+            Unggah naskah kebijakan, standar, atau SOP mutu terbaru. Pipeline otomatis akan mengekstrak teks tiap halaman, mendeteksi noise/scan, melakukan chunking token, dan meng-generate vektor embedding (768 dimensi).
+          </div>
+        </div>
       </div>
 
       <div className="upload-grid-container">

@@ -30,9 +30,12 @@ export default function Sidebar({
     <aside className={`sirena-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       {/* Sidebar Header Brand */}
       <div className="sidebar-header">
-        <div className="brand-seal-icon">
-          <GraduationCap size={22} />
-        </div>
+        <img 
+          src="/logo-sys.png" 
+          alt="STIKOM Yos Sudarso" 
+          style={{ width: 38, height: 38, objectFit: 'contain', flexShrink: 0 }}
+          onError={(e) => { e.target.style.display = 'none'; }}
+        />
         {!isCollapsed && (
           <div className="brand-text-block">
             <span className="brand-title-sirena">

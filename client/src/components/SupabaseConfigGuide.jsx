@@ -127,13 +127,18 @@ $$;`;
 
   return (
     <div>
-      <div style={{ marginBottom: '1.75rem' }}>
-        <h2 style={{ fontSize: '1.6rem', marginBottom: '0.35rem' }}>
-          Integrasi Supabase & Konfigurasi Sistem
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          SANDI terhubung langsung dengan infrastruktur database PostgreSQL, ekstensi vektor (pgvector), dan penyimpanan cloud Supabase STIKOM Yos Sudarso.
-        </p>
+      <div className="dashboard-header-block">
+        <div>
+          <div className="dashboard-heading-title">
+            Integrasi Supabase & Konfigurasi Sistem
+            <span className="heading-tag-purple">
+              Database Master — PostgreSQL pgvector
+            </span>
+          </div>
+          <div className="dashboard-heading-desc">
+            Sistem terhubung langsung dengan infrastruktur database PostgreSQL, ekstensi vektor (pgvector), dan penyimpanan cloud Supabase STIKOM Yos Sudarso.
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>

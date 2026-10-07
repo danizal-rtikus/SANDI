@@ -79,17 +79,33 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
 
   return (
     <div>
-      <div style={{ marginBottom: '1.75rem' }}>
-        <h2 style={{ fontSize: '1.6rem', marginBottom: '0.35rem' }}>
-          Koleksi & Arsip Dokumen Mutu SPMI
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Daftar seluruh dokumen kebijakan, standar, manual, SOP, dan pedoman resmi STIKOM Yos Sudarso yang terdaftar dan terindeks dalam korpus sistem pencarian cerdas SANDI.
-        </p>
+      <div className="dashboard-header-block">
+        <div>
+          <div className="dashboard-heading-title">
+            Koleksi & Repositori Dokumen SPMI
+            <span className="heading-tag-purple">
+              LPM — Lembaga Penjaminan Mutu
+            </span>
+          </div>
+          <div className="dashboard-heading-desc">
+            Daftar seluruh dokumen kebijakan, standar, manual, SOP, dan pedoman resmi STIKOM Yos Sudarso yang terdaftar dan terindeks dalam korpus sistem pencarian cerdas.
+          </div>
+        </div>
+
+        <button 
+          className="btn-feedback" 
+          onClick={fetchDocuments}
+          title="Muat Ulang Dokumen"
+          style={{ padding: '0.5rem 0.85rem' }}
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Segarkan Data
+        </button>
       </div>
 
       {/* Toolbar */}
-      <div className="catalog-toolbar">
+      <div className="sirena-card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div className="catalog-toolbar" style={{ margin: 0 }}>
         <div style={{ display: 'flex', gap: '0.75rem', flex: 1 }}>
           <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
             <Search size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: 12, top: 12 }} />
@@ -117,16 +133,8 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
             <option value="6">Formulir & Instrumen</option>
           </select>
         </div>
-
-        <button 
-          className="btn-feedback" 
-          onClick={fetchDocuments}
-          title="Muat Ulang Dokumen"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Segarkan Data
-        </button>
       </div>
+    </div>
 
       {/* Table */}
       <div className="catalog-table-wrap">
