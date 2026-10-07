@@ -95,17 +95,22 @@ export async function generateRagAnswer(query, chunks) {
     };
   }
 
-  // Susun sitasi dan konteks naskah dokumen
-  const citations = chunks.slice(0, 5).map(c => ({
-    documentTitle: c.document_title || c.documentTitle,
-    pageNumber: c.page_number || c.pageNumber,
-    documentId: c.document_id || c.documentId,
-    sectionTitle: c.section_title || c.sectionTitle || '',
-    snippet: (c.content || c.snippet || '').substring(0, 400)
-  }));
+  // Susun sitasi dan konteks naskah dokumen dengan judul bersih
+  const citations = chunks.slice(0, 5).map(c => {
+    const rawTitle = c.document_title || c.documentTitle || '';
+    const cleanTitle = rawTitle.replace(/^\d+[\s._-]+/, '').trim() || rawTitle;
+    return {
+      documentTitle: cleanTitle,
+      rawDocumentTitle: rawTitle,
+      pageNumber: c.page_number || c.pageNumber,
+      documentId: c.document_id || c.documentId,
+      sectionTitle: c.section_title || c.sectionTitle || '',
+      snippet: (c.content || c.snippet || '').substring(0, 500)
+    };
+  });
 
   const contextText = citations.map((c, i) => 
-    `[Sumber ${i + 1}: ${c.documentTitle}, Halaman ${c.pageNumber}]\n${c.snippet}`
+    `[Dokumen Rujukan ${i + 1}: ${c.documentTitle}, Halaman ${c.pageNumber}]\n${c.snippet}`
   ).join('\n\n---\n\n');
 
   try {
@@ -114,35 +119,60 @@ export async function generateRagAnswer(query, chunks) {
       messages: [
         {
           role: 'system',
-          content: `Anda adalah modul penalaran dokumen mutu SIRENA / SANDI untuk STIKOM Yos Sudarso, Purwokerto.
+          content: `Anda adalah analis dokumen mutu resmi SANDI di STIKOM Yos Sudarso, Purwokerto.
 
-PEDOMAN INTEGRITAS & ANTI-AI SLOP:
-1. DILARANG menggunakan salam pembuka, penutup, basa-basi, atau kata-kata umum AI seperti "Tentu saja!", "Halo!", "Sebagai asisten cerdas...", dsb.
-2. Jawab secara ringkas, padat, dan langsung pada substansi pasal/ketentuan.
-3. HANYA ambil informasi yang tertulis pada potongan dokumen konteks di bawah. JANGAN berhalusinasi atau menambahkan opini di luar dokumen.
-4. Setiap klausa yang menjelaskan aturan WAJIB menyertakan rujukan sitasi format: [Nama Dokumen, hlm. X].
-5. Jika konteks yang ada tidak memuat jawaban yang dicari, nyatakan secara tegas: "Ketentuan ini belum diatur dalam dokumen SPMI yang terindeks."`
+TUGAS:
+Sintesis dan jawab pertanyaan pengguna berdasarkan naskah dokumen SPMI / SOP / Pedoman resmi yang dilampirkan.
+
+PEDOMAN INTEGRITAS & TATA NASKAH (ANTI-AI SLOP):
+1. DILARANG menggunakan kata sapaan, salam ("Halo", "Selamat pagi"), basa-basi percakapan ("Tentu saja", "Baik, berikut adalah..."), dan kalimat penutup generik AI.
+2. Gunakan gaya bahasa formal, presisi, lugas, dan faktual sesuai standar audit mutu akademik perguruan tinggi.
+3. HANYA sarikan fakta yang tertulis eksplisit pada potongan dokumen konteks di bawah. Jangan beropini atau berasumsi.
+4. FORMAT WAJIB:
+### Ketetapan Pokok
+[1-2 kalimat ringkas dan tegas yang langsung menjawab inti pertanyaan]
+
+### Rincian Prosedur & Ketentuan
+- [Poin 1: Tahapan, tata cara, atau syarat yang diatur]
+- [Poin 2: Unit / pejabat penanggung jawab atau batas waktu jika disebutkan]
+- [Poin 3: Ketentuan penting lainnya]
+
+### Rujukan Dokumen Resmi
+- [Nama Dokumen], Halaman [X]
+
+5. Jika dokumen yang disediakan tidak memuat jawaban sama sekali, tuliskan:
+### Ketetapan Pokok
+Informasi spesifik terkait pertanyaan ini belum ditemukan dalam naskah dokumen SPMI yang terindeks saat ini.`
         },
         {
           role: 'user',
-          content: `Pertanyaan:\n${query}\n\nKonteks Dokumen SPMI:\n${contextText}\n\nJawaban Ringkas Bersitasi:`
+          content: `Pertanyaan Penelusuran:\n"${query}"\n\nNaskah Dokumen Konteks:\n${contextText}\n\nLaporan Telaah Dokumen Mutu:`
         }
       ],
       temperature: 0.1,
-      max_tokens: 600
+      max_tokens: 2000
     });
 
     const answer = response.choices[0]?.message?.content?.trim();
-    if (answer) {
+    if (answer && answer.length > 20) {
       return { answer, citations };
     }
   } catch (err) {
     console.warn('⚠️ Gagal memanggil DeepSeek API via SumoPod, menggunakan formatter terstruktur:', err.message);
   }
 
-  // Fallback deterministik bebas AI-slop
+  // Fallback deterministik terstruktur resmi (bebas AI-slop)
   const top = citations[0];
-  const fallbackAnswer = `Berdasarkan ketentuan dalam **${top.documentTitle}** (hlm. ${top.pageNumber}):\n\n> "${top.snippet.replace(/\n+/g, ' ').substring(0, 260)}..."\n\nVerifikasi dokumen asli dapat ditinjau langsung melalui tombol **Buka PDF (hlm. ${top.pageNumber})**.`;
+  const cleanedSnippet = top.snippet
+    .replace(/SEKOLAH TINGGI ILMU KOMPUTER YOS SUDARSO/gi, '')
+    .replace(/PROSEDUR SPMI|KEBIJAKAN SPMI|STANDAR SPMI/gi, '')
+    .replace(/Kode Dok\s*:[^\n]+/gi, '')
+    .replace(/Revisi ke\s*:[^\n]+/gi, '')
+    .replace(/Hal\s*\.?\s*:\s*[^\n]+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const fallbackAnswer = `### Ketetapan Pokok\nKetentuan mengenai topik ini tercantum dalam naskah resmi **${top.documentTitle}** (Halaman ${top.pageNumber}).\n\n### Rincian Naskah\n${cleanedSnippet.substring(0, 320)}...\n\n### Rujukan Dokumen Resmi\n- **${top.documentTitle}**, Halaman ${top.pageNumber}`;
 
   return {
     answer: fallbackAnswer,

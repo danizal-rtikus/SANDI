@@ -12,7 +12,9 @@ import {
   Clock, 
   SlidersHorizontal,
   ChevronRight,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 
 
@@ -37,6 +39,61 @@ export const highlightQuery = (text, query) => {
   }
 };
 
+export const renderStructuredAnswer = (rawText) => {
+  if (!rawText) return null;
+
+  // Split by markdown h3 sections (### Section)
+  const sections = rawText.split(/(?=###\s+)/g);
+
+  return (
+    <div className="rag-structured-body">
+      {sections.map((sec, idx) => {
+        const lines = sec.trim().split('\n').filter(Boolean);
+        if (lines.length === 0) return null;
+        const firstLine = lines[0].trim();
+        const isHeading = firstLine.startsWith('### ');
+        const headingTitle = isHeading ? firstLine.replace('### ', '').trim() : null;
+        const contentLines = isHeading ? lines.slice(1) : lines;
+
+        return (
+          <div key={idx} className="rag-section-card">
+            {headingTitle && (
+              <div className="rag-section-header">
+                <span className="rag-section-tag">{headingTitle}</span>
+              </div>
+            )}
+            <div className="rag-section-content">
+              {contentLines.map((line, lIdx) => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                  return (
+                    <div key={lIdx} className="rag-bullet-item">
+                      <span className="rag-bullet-dot">•</span>
+                      <span>{trimmed.substring(2)}</span>
+                    </div>
+                  );
+                }
+                if (trimmed.startsWith('> ')) {
+                  return (
+                    <blockquote key={lIdx} className="rag-blockquote">
+                      {trimmed.substring(2)}
+                    </blockquote>
+                  );
+                }
+                return (
+                  <p key={lIdx} className="rag-paragraph">
+                    {trimmed}
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery = '' }) {
   const [query, setQuery] = useState(initialQuery || '');
   const [categoryId, setCategoryId] = useState('');
@@ -46,11 +103,20 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
   const [ragAnswer, setRagAnswer] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState({});
+  const [copiedAnswer, setCopiedAnswer] = useState(false);
   const [popularQueries, setPopularQueries] = useState([
     "Apa luas lingkup penjaminan mutu SPMI di STIKOM Yos Sudarso?",
     "Statuta dan landasan hukum yang dirujuk dalam Kebijakan SPMI",
     "Bagaimana prosedur audit mutu internal (AMI) dan siklus PPEPP?"
   ]);
+
+  const handleCopyAnswer = () => {
+    if (!ragAnswer?.answer) return;
+    navigator.clipboard.writeText(ragAnswer.answer);
+    setCopiedAnswer(true);
+    onShowToast('Hasil telaah dokumen berhasil disalin ke clipboard');
+    setTimeout(() => setCopiedAnswer(false), 2500);
+  };
 
   React.useEffect(() => {
     fetch('/api/suggested-queries')
@@ -250,38 +316,57 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
 
       {/* RAG Answer Summary Card (FR-30, FR-31) */}
       {ragAnswer && (
-        <div className="rag-answer-box">
-          <div className="rag-header">
-            <div className="rag-title-badge">
-              <BookOpenCheck size={18} />
-              Rujukan Ketentuan SPMI
+        <div className="rag-answer-box-pro">
+          <div className="rag-header-pro">
+            <div className="rag-header-left">
+              <div className="rag-title-badge-pro">
+                <BookOpenCheck size={19} />
+                <span>Hasil Telaah Regulasi & Dokumen SPMI</span>
+              </div>
+              <span className="rag-subtitle-pro">
+                Disintesis secara objektif dan faktual dari naskah resmi STIKOM Yos Sudarso
+              </span>
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Disintesis langsung dari naskah pasal resmi terkait
-            </span>
+
+            <button 
+              type="button"
+              className="btn-copy-rag-pro"
+              onClick={handleCopyAnswer}
+              title="Salin hasil telaah ini ke clipboard"
+            >
+              {copiedAnswer ? <Check size={14} color="#16a34a" /> : <Copy size={14} />}
+              <span>{copiedAnswer ? 'Tersalin!' : 'Salin Telaah'}</span>
+            </button>
           </div>
 
-          <div className="rag-content">
-            {ragAnswer.answer}
+          <div className="rag-content-pro">
+            {renderStructuredAnswer(ragAnswer.answer)}
           </div>
 
           {ragAnswer.citations && ragAnswer.citations.length > 0 && (
-            <div className="rag-citations-list">
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                Sitasi Terkait:
-              </span>
-              {ragAnswer.citations.map((c, i) => (
-                <button 
-                  key={i} 
-                  className="citation-chip"
-                  onClick={() => onOpenViewer(c.documentId, c.pageNumber, query, c.documentTitle, c.snippet)}
-                  title="Klik untuk membuka PDF tepat pada halaman ini"
-                >
-                  <FileText size={13} color="var(--brand-primary)" />
-                  [{c.documentTitle}, hlm. {c.pageNumber}]
-                  <ChevronRight size={13} />
-                </button>
-              ))}
+            <div className="rag-citations-box-pro">
+              <div className="rag-citations-heading">
+                <FileText size={14} />
+                <span>Naskah Asli Terverifikasi (Klik untuk membuka lembar PDF):</span>
+              </div>
+              <div className="rag-citations-chips-wrap">
+                {ragAnswer.citations.map((c, i) => {
+                  const cleanTitle = (c.documentTitle || '').replace(/^\d+[\s._-]+/, '');
+                  return (
+                    <button 
+                      key={i} 
+                      className="citation-chip-pro"
+                      onClick={() => onOpenViewer(c.documentId, c.pageNumber, query, cleanTitle, c.snippet)}
+                      title={`Buka ${cleanTitle} tepat pada Halaman ${c.pageNumber}`}
+                    >
+                      <span className="citation-chip-title">{cleanTitle}</span>
+                      <span className="citation-chip-divider">•</span>
+                      <span className="citation-chip-page">Hlm. {c.pageNumber}</span>
+                      <ChevronRight size={13} className="citation-chip-arrow" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
