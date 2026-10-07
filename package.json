@@ -1,0 +1,21 @@
+{
+  "name": "sandi-app",
+  "version": "1.0.0",
+  "description": "SANDI - Sistem Arsip & Navigasi Dokumen Internal (STIKOM Yos Sudarso)",
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "node start-dev.js",
+    "build": "npm run build --prefix client",
+    "install:all": "npm install --prefix client; npm install --prefix server"
+  },
+  "keywords": [
+    "sandi",
+    "rag",
+    "semantic-search",
+    "spmi",
+    "stikom-yos-sudarso"
+  ],
+  "author": "STIKOM Yos Sudarso",
+  "license": "ISC"
+}
