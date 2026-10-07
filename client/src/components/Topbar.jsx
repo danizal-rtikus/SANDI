@@ -30,10 +30,10 @@ export default function Topbar({
         </button>
 
         <div className="topbar-breadcrumb">
-          <span>SIRENA</span>
+          <span>SANDI</span>
           <span style={{ color: 'var(--text-light)', fontWeight: 400 }}>/</span>
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            SANDI — Navigasi Dokumen Mutu Internal
+            Navigasi Dokumen Mutu Internal
           </span>
         </div>
       </div>

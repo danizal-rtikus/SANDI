@@ -137,7 +137,7 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
         <div className="sirena-card-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Search size={18} color="var(--primary-purple)" />
-            <span>Pencarian Cepat Dokumen & Regulasi SPMI (SIRENA-RAG)</span>
+            <span>Pencarian Cepat Dokumen & Regulasi SPMI (SANDI)</span>
           </div>
           <button 
             className="btn-feedback"

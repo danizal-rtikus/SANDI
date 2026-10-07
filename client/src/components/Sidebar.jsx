@@ -5,7 +5,6 @@ import {
   FolderArchive, 
   UploadCloud, 
   BarChart3, 
-  Database, 
   BookOpen, 
   FileText, 
   ShieldCheck, 
@@ -39,7 +38,7 @@ export default function Sidebar({
         {!isCollapsed && (
           <div className="brand-text-block">
             <span className="brand-title-sirena">
-              SIRENA
+              SANDI
             </span>
             <span className="brand-sub-sirena">
               STIKOM Yos Sudarso
@@ -123,18 +122,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* DATA MASTER & SISTEM */}
-        <div className="nav-group-section">
-          {!isCollapsed && <span className="nav-group-heading">SISTEM MASTER</span>}
-          <button 
-            className={`sidebar-nav-item ${activeTab === 'config' ? 'active' : ''}`}
-            onClick={() => setActiveTab('config')}
-            title="Supabase & Model"
-          >
-            <Database size={18} />
-            {!isCollapsed && <span>Supabase pgvector</span>}
-          </button>
-        </div>
+
       </div>
 
       {/* Sidebar Footer User Info from Image 2 */}

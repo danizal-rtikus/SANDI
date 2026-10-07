@@ -141,7 +141,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
       <div className="hero-banner">
         <div className="hero-badge">
           <ShieldCheck size={14} />
-          Modul SIRENA-RAG: Navigasi Dokumen Mutu Internal
+          SANDI: Navigasi Dokumen Mutu Internal
         </div>
         <h1 className="hero-title">
           Penelusuran Aturan & Dokumen SPMI Presisi
@@ -244,10 +244,10 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           <div className="rag-header">
             <div className="rag-title-badge">
               <BookOpenCheck size={18} />
-              Rujukan Ketentuan SPMI (SIRENA-RAG)
+              Rujukan Ketentuan SPMI
             </div>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Disintesis langsung dari naskah pasal terkait (DeepSeek-V4)
+              Disintesis langsung dari naskah pasal resmi terkait
             </span>
           </div>
 

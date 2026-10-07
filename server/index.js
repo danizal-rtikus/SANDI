@@ -56,9 +56,7 @@ app.get('/api/config', (req, res) => {
     appName: 'SANDI',
     institution: 'STIKOM Yos Sudarso Purwokerto',
     version: '1.0.0',
-    supabaseUrl: process.env.SUPABASE_URL || 'https://fznhvuyplojsvcodxfkk.supabase.co',
     isSupabaseLive: dbStore.isSupabaseLive,
-    hasGeminiKey: !!process.env.GEMINI_API_KEY,
     roles: ['super_admin', 'admin_mutu', 'asesor', 'dosen']
   });
 });
