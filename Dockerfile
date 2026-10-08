@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend (Vite React)
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # Install client dependencies
@@ -11,7 +11,7 @@ COPY client/ ./client/
 RUN cd client && npm run build
 
 # Stage 2: Production Node.js Server
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 
 # Install server dependencies
