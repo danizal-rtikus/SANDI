@@ -16,7 +16,8 @@ import {
   Copy,
   Check,
   Loader2,
-  Sparkles,
+  Scale,
+  FileSearch,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -25,15 +26,22 @@ import {
 
 export const highlightQuery = (text, query) => {
   if (!query || !text) return text;
-  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
+  const rawWords = query.trim().toLowerCase().match(/\b[a-z0-9_-]+\b/g) || [];
+  const STOPWORDS = new Set([
+    'yang', 'di', 'ke', 'dari', 'pada', 'dalam', 'untuk', 'dengan', 'dan', 'atau',
+    'ini', 'itu', 'adalah', 'yaitu', 'ada', 'bisa', 'dapat', 'akan', 'telah', 'sudah'
+  ]);
+  const words = rawWords.filter(w => w.length > 2 && !STOPWORDS.has(w));
   if (words.length === 0) return text;
 
   try {
-    const regex = new RegExp(`(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    // Batas kata utuh \b mencegah kesalahan sorot parsial seperti per-aturan atau de-skripsi
+    const regex = new RegExp(`\\b(${escaped})\\b`, 'gi');
     const parts = text.split(regex);
     return parts.map((part, i) => 
       regex.test(part) ? (
-        <mark key={i} style={{ background: '#fef08a', color: '#1e293b', padding: '0 2px', borderRadius: '3px' }}>
+        <mark key={i} style={{ background: '#fef08a', color: '#1e293b', padding: '0 2px', borderRadius: '3px', fontWeight: 600 }}>
           {part}
         </mark>
       ) : part
@@ -454,12 +462,12 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
                 <span>Hasil Telaah Regulasi & Dokumen SPMI</span>
                 {ragAnswer?.isThinking && (
                   <span className="rag-streaming-pulse">
-                    <Sparkles size={12} className="sparkle-glow" /> Menelaah klausul...
+                    <Scale size={13} /> Menelaah naskah...
                   </span>
                 )}
                 {ragAnswer?.isStreaming && !ragAnswer?.isThinking && (
                   <span className="rag-streaming-pulse">
-                    <span className="pulse-dot"></span> Mengetik...
+                    <span className="pulse-dot"></span> Menyusun laporan...
                   </span>
                 )}
               </div>
@@ -469,7 +477,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
             </div>
 
             <button 
-              type="button"
+              type="button" 
               className="btn-copy-rag-pro"
               onClick={handleCopyAnswer}
               title="Salin hasil telaah ini ke clipboard"
@@ -480,7 +488,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
             </button>
           </div>
 
-          {/* Live Thinking Stream Box (DeepSeek Reasoner) */}
+          {/* Catatan Penelaahan Regulasi SPMI (DeepSeek Reasoner) */}
           {ragAnswer?.thinking && (
             <div className="rag-thinking-card">
               <button 
@@ -489,13 +497,13 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
                 onClick={() => setShowThinking(!showThinking)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <Sparkles size={14} color="#7c3aed" />
+                  <Scale size={14} color="#7c3aed" />
                   <span className="rag-thinking-title">
-                    {ragAnswer.isThinking ? 'Sedang menganalisis naskah SPMI & landasan hukum...' : 'Analisis Naskah Selesai'}
+                    {ragAnswer.isThinking ? 'Catatan Penelaahan Regulasi & Landasan Hukum (Sedang berjalan...)' : 'Catatan Penelaahan Regulasi SPMI (Selesai)'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  <span>{showThinking ? 'Sembunyikan' : 'Lihat proses analisis'}</span>
+                  <span>{showThinking ? 'Sembunyikan' : 'Buka catatan telaah'}</span>
                   {showThinking ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
               </button>

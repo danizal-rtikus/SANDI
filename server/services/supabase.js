@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sampleCategories, sampleDocuments } from '../sampleData.js';
 
 import { fileURLToPath } from 'url';
+import { cosineSimilarity } from './ai.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -294,8 +295,32 @@ class LocalStore {
       }
     }
 
-    // 2. Fallback search cerdas di in-memory store
-    const queryTokens = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    // 2. Mesin Temu Balik Mutu (Word Boundary Tokenizer, Specificity Filter, & Proximity Scoring)
+    const rawTokens = (query || '').toLowerCase().match(/\b[a-z0-9_-]+\b/g) || [];
+    const STOPWORDS = new Set([
+      'yang', 'di', 'ke', 'dari', 'pada', 'dalam', 'untuk', 'dengan', 'dan', 'atau',
+      'ini', 'itu', 'adalah', 'yaitu', 'ada', 'bisa', 'dapat', 'akan', 'telah', 'sudah',
+      'jika', 'kalau', 'maka', 'tentang', 'terkait', 'oleh', 'secara', 'sebagai', 'serta',
+      'apa', 'apakah', 'bagaimana', 'dimana', 'siapa', 'mengapa', 'stikom', 'yos', 'sudarso'
+    ]);
+
+    const keywords = rawTokens.filter(t => t.length > 2 && !STOPWORDS.has(t));
+    const effectiveKeywords = keywords.length > 0 ? keywords : rawTokens.filter(t => t.length > 1);
+
+    // Kategori kata umum administratif vs kata kunci inti spesifik
+    const GENERIC_WORDS = new Set([
+      'aturan', 'peraturan', 'ketentuan', 'pedoman', 'standar', 'dokumen', 'surat', 'kode', 'sistem'
+    ]);
+    const specificKeywords = effectiveKeywords.filter(k => !GENERIC_WORDS.has(k));
+
+    // Pemetaan sinonim istilah akademik resmi STIKOM Yos Sudarso
+    const SYNONYM_MAP = {
+      'skripsi': ['tugas akhir', 'ta', 'pendadaran'],
+      'ami': ['audit mutu internal', 'audit internal'],
+      'lektor': ['jabatan fungsional', 'jafung'],
+      'ppepp': ['penetapan', 'pelaksanaan', 'evaluasi', 'pengendalian', 'peningkatan']
+    };
+
     const results = [];
 
     for (const doc of this.documents) {
@@ -304,44 +329,83 @@ class LocalStore {
       if (filters.year && Number(doc.year) !== Number(filters.year)) continue;
       if (filters.documentId && doc.id !== filters.documentId) continue;
 
+      const lowerTitle = (doc.title || '').toLowerCase();
+
       for (const chunk of (doc.chunks || [])) {
         if (chunk.is_noise) continue;
 
-        // Hitung similarity: gabungan keyword match + token overlap + section score
-        const lowerContent = chunk.content.toLowerCase();
-        const lowerTitle = doc.title.toLowerCase();
+        const lowerContent = (chunk.content || '').toLowerCase();
         const lowerSection = (chunk.section_title || '').toLowerCase();
 
-        let tokenScore = 0;
-        let matchedKeywords = 0;
+        // A. Strict Word Boundary Matching (\b...\b)
+        // Mencegah "deskripsi" cocok dengan "skripsi", atau "pelanggaran" cocok dengan "anggaran"
+        let matchedCount = 0;
+        let matchedSpecificCount = 0;
 
-        for (const token of queryTokens) {
-          if (lowerContent.includes(token)) {
-            tokenScore += 0.25;
-            matchedKeywords++;
+        for (const kw of effectiveKeywords) {
+          const kwRegex = new RegExp(`\\b${kw}\\b`, 'i');
+          let isMatch = false;
+
+          if (kwRegex.test(lowerContent) || kwRegex.test(lowerSection) || kwRegex.test(lowerTitle)) {
+            isMatch = true;
+          } else if (SYNONYM_MAP[kw]) {
+            for (const syn of SYNONYM_MAP[kw]) {
+              if (new RegExp(`\\b${syn}\\b`, 'i').test(lowerContent)) {
+                isMatch = true;
+                break;
+              }
+            }
           }
-          if (lowerTitle.includes(token)) {
-            tokenScore += 0.20;
-          }
-          if (lowerSection.includes(token)) {
-            tokenScore += 0.20;
+
+          if (isMatch) {
+            matchedCount++;
+            if (!GENERIC_WORDS.has(kw)) {
+              matchedSpecificCount++;
+            }
           }
         }
 
-        // Skor dasar jika ada kata kunci yang cocok
-        if (matchedKeywords > 0 || tokenScore > 0) {
-          const normalizedScore = Math.min(0.96, Math.max(0.52, 0.45 + (tokenScore / (queryTokens.length || 1)) * 0.45));
-          results.push({
-            chunk_id: chunk.id,
-            document_id: doc.id,
-            document_title: doc.title,
-            category_name: doc.category_name || 'Umum',
-            page_number: chunk.page_number,
-            content: chunk.content,
-            similarity: parseFloat(normalizedScore.toFixed(3)),
-            section_title: chunk.section_title
-          });
+        // Eliminasi False Positive: Jika query memiliki kata spesifik (misal 'skripsi', 'anggaran', 'ami')
+        // tetapi chunk ini sama sekali tidak memiliki kata spesifik tersebut, maka lewati!
+        if (specificKeywords.length > 0 && matchedSpecificCount === 0) {
+          continue;
         }
+
+        if (matchedCount === 0) continue;
+
+        // B. Bigram & Phrase Proximity Bonus
+        let phraseBonus = 0;
+        for (let i = 0; i < effectiveKeywords.length - 1; i++) {
+          const bigram = `${effectiveKeywords[i]}\\s+(?:[a-z0-9_-]+\\s+)?${effectiveKeywords[i + 1]}`;
+          if (new RegExp(`\\b${bigram}\\b`, 'i').test(lowerContent)) {
+            phraseBonus += 0.35;
+          }
+        }
+
+        // C. Cosine Vector Similarity
+        let vectorSim = 0;
+        if (chunk.embedding && embedding) {
+          try {
+            vectorSim = cosineSimilarity(embedding, chunk.embedding);
+          } catch (e) {
+            vectorSim = 0;
+          }
+        }
+
+        // D. Skor Gabungan Terkalibrasi
+        const lexicalScore = (matchedCount / (effectiveKeywords.length || 1)) * 0.45 + (matchedSpecificCount * 0.25) + phraseBonus;
+        const finalScore = Math.min(0.98, Math.max(0.51, 0.40 + (vectorSim * 0.30) + (lexicalScore * 0.45)));
+
+        results.push({
+          chunk_id: chunk.id,
+          document_id: doc.id,
+          document_title: doc.title,
+          category_name: doc.category_name || 'Umum',
+          page_number: chunk.page_number,
+          content: chunk.content,
+          similarity: parseFloat(finalScore.toFixed(3)),
+          section_title: chunk.section_title
+        });
       }
     }
 

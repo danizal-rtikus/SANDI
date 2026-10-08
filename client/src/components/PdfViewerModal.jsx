@@ -38,7 +38,7 @@ function highlightKeywords(text, keywords) {
   if (!text || !keywords || keywords.length === 0) return text;
   try {
     const escaped = keywords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const regex = new RegExp(`(${escaped})`, 'gi');
+    const regex = new RegExp(`\\b(${escaped})\\b`, 'gi');
     const parts = text.split(regex);
     return parts.map((part, idx) => {
       if (regex.test(part)) {
