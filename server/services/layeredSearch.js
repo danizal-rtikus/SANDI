@@ -19,6 +19,9 @@ export const GENERIC_ADMIN_WORDS = new Set([
 
 // Glosarium Istilah Akademik Resmi STIKOM Yos Sudarso
 export const CAMPUS_GLOSSARY = {
+  'pmb': ['penerimaan mahasiswa baru', 'mahasiswa baru', 'calon mahasiswa', 'pendaftar'],
+  'mahasiswa baru': ['pmb', 'penerimaan mahasiswa baru', 'calon mahasiswa baru', 'jumlah pendaftar'],
+  'penerimaan mahasiswa baru': ['pmb', 'mahasiswa baru', 'calon mahasiswa baru', 'jumlah pendaftar'],
   'skripsi': ['tugas akhir', 'ta', 'pendadaran', 'komprehensif', 'bimbingan skripsi', 'pengajuan judul'],
   'ta': ['skripsi', 'tugas akhir', 'pendadaran'],
   'tugas akhir': ['skripsi', 'ta', 'pendadaran', 'komprehensif'],
@@ -59,9 +62,10 @@ export function normalizeAndExpandQuery(rawQuery = '') {
   // Kumpulkan ekspansi istilah glosarium kampus
   const expandedTerms = new Set([...effectiveTokens]);
 
-  // Cek frasa (misal "tugas akhir", "audit mutu")
+  // Cek frasa & kata glosarium kampus dengan batasan kata \b agar tidak salah mencocokkan substring (seperti 'ta' di 'terakhir')
   for (const [key, synonyms] of Object.entries(CAMPUS_GLOSSARY)) {
-    if (lowerQuery.includes(key)) {
+    const keyPattern = key.includes(' ') ? key : `\\b${key}\\b`;
+    if (new RegExp(keyPattern, 'i').test(lowerQuery)) {
       synonyms.forEach(s => expandedTerms.add(s));
     }
   }
@@ -86,7 +90,7 @@ export function normalizeAndExpandQuery(rawQuery = '') {
 // ==============================================================================
 
 /**
- * Jalur A: Lexical Scoring dengan Strict Word Boundary (\b...\b) & Proximity
+ * Jalur A: Lexical Scoring dengan Strict Word Boundary (\b...\b), Proximity, Exact Phrase & Title Boost
  */
 export function scoreChunkLexical(chunk, doc, queryInfo) {
   const lowerContent = (chunk.content || '').toLowerCase();
@@ -96,7 +100,7 @@ export function scoreChunkLexical(chunk, doc, queryInfo) {
   let matchedSpecificCount = 0;
   let matchedGeneralCount = 0;
 
-  // 1. Pencocokan kata spesifik & kata umum dengan regex batas kata \b
+  // 1. Pencocokan kata spesifik & kata umum di konten teks & section chunk
   for (const term of queryInfo.expandedTerms) {
     const isMultiWord = term.includes(' ');
     const pattern = isMultiWord 
@@ -108,7 +112,6 @@ export function scoreChunkLexical(chunk, doc, queryInfo) {
 
     if (regex.test(lowerContent)) hit = true;
     else if (regex.test(lowerSection)) hit = true;
-    else if (regex.test(lowerTitle)) hit = true;
 
     if (hit) {
       if (queryInfo.specificTokens.includes(term) || !GENERIC_ADMIN_WORDS.has(term)) {
@@ -120,7 +123,7 @@ export function scoreChunkLexical(chunk, doc, queryInfo) {
   }
 
   // Eliminasi False Positive fatal: Jika pengguna menanyakan kata spesifik (misal 'skripsi'),
-  // tetapi chunk tidak memuat kata spesifik tersebut atau sinonimnya sama sekali, tolak chunk!
+  // tetapi chunk tidak memuat kata spesifik tersebut atau sinonimnya sama sekali di teks/section, tolak chunk!
   if (queryInfo.specificTokens.length > 0 && matchedSpecificCount === 0) {
     return 0;
   }
@@ -138,9 +141,30 @@ export function scoreChunkLexical(chunk, doc, queryInfo) {
     }
   }
 
-  // 3. Skor Leksikal gabungan
-  const lexicalScore = (matchedSpecificCount * 0.45) + (matchedGeneralCount * 0.15) + phraseBonus;
-  return lexicalScore;
+  // 3. Bonus Frasa Lengkap / Data Kuantitatif Pasti (Exact Query Match & Numeric Data)
+  // Contoh: "jumlah mahasiswa baru = 155" atau query utuh muncul utuh dalam teks
+  let exactPhraseBonus = 0;
+  const cleanRaw = queryInfo.rawQuery.trim().toLowerCase();
+  if (cleanRaw.length > 3 && lowerContent.includes(cleanRaw)) {
+    exactPhraseBonus += 0.80;
+  }
+  // Bonus jika memuat pola persamaan data numerik resmi (misal: "jumlah ... = [0-9]+")
+  if (/jumlah\s+[a-z0-9\s_-]+=\s*\d+/i.test(lowerContent)) {
+    exactPhraseBonus += 0.75;
+  }
+
+  // 4. Title Relevance Multiplier (Fielded BM25F: Kecocokan Kata Kunci pada Judul Dokumen)
+  let titleMatchMultiplier = 1.0;
+  for (const term of queryInfo.expandedTerms) {
+    const pattern = term.includes(' ') ? term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : `\\b${term}\\b`;
+    if (new RegExp(pattern, 'i').test(lowerTitle)) {
+      titleMatchMultiplier += 0.25;
+    }
+  }
+
+  // Skor Leksikal gabungan
+  const baseLexical = (matchedSpecificCount * 0.45) + (matchedGeneralCount * 0.15) + phraseBonus + exactPhraseBonus;
+  return baseLexical * titleMatchMultiplier;
 }
 
 // ==============================================================================
@@ -300,14 +324,51 @@ export async function executeLayeredSearch(allDocuments, rawQuery, queryEmbeddin
   // Urutkan chunk berdasarkan similarity gabungan RRF
   scoredChunks.sort((a, b) => b.similarity - a.similarity);
 
-  // Ambil 30 chunk teratas untuk agregasi tingkat dokumen
-  const topCandidateChunks = scoredChunks.slice(0, 35);
+  // Diversifikasi Kandidat (Per-Document Candidate Quota):
+  // Mencegah satu dokumen tebal (misal Bukti Proker ~400 hal) memonopoli seluruh kandidat RAG.
+  // Berikan jatah seimbang: ambil maksimal 4 chunk teratas per dokumen terlebih dahulu,
+  // lalu tambahkan sisa chunk relevan lainnya hingga memenuhi kuota pool.
+  const docChunkCounts = new Map();
+  const diversifiedChunks = [];
+  const overflowChunks = [];
+
+  for (const c of scoredChunks) {
+    const currentCount = docChunkCounts.get(c.document_id) || 0;
+    if (currentCount < 4) {
+      diversifiedChunks.push(c);
+      docChunkCounts.set(c.document_id, currentCount + 1);
+    } else {
+      overflowChunks.push(c);
+    }
+  }
+
+  // Gabungkan kandidat terdiversifikasi diikuti overflow teratas hingga 40 kandidat
+  const topCandidateChunks = [...diversifiedChunks, ...overflowChunks].slice(0, 40);
 
   // Layer 4: Agregasi Tingkat Dokumen
   const aggregatedDocuments = aggregateChunksToDocuments(topCandidateChunks).slice(0, topK);
 
-  // Format flat results untuk kompatibilitas LLM & RAG Citations
-  const flatResults = topCandidateChunks.slice(0, 10).map(c => ({
+  // Format flat results untuk LLM & RAG Citations:
+  // Pastikan flatResults mewakili chunk terbaik dari berbagai dokumen berbeda (maksimal 2-3 chunk per dokumen untuk 10 besar)
+  const ragChunkCounts = new Map();
+  const diversifiedRagChunks = [];
+  for (const c of topCandidateChunks) {
+    const cur = ragChunkCounts.get(c.document_id) || 0;
+    if (cur < 3 && diversifiedRagChunks.length < 10) {
+      diversifiedRagChunks.push(c);
+      ragChunkCounts.set(c.document_id, cur + 1);
+    }
+  }
+  // Jika masih kurang dari 10, isi dari sisa topCandidateChunks
+  if (diversifiedRagChunks.length < 10) {
+    for (const c of topCandidateChunks) {
+      if (!diversifiedRagChunks.some(dc => dc.chunk_id === c.chunk_id) && diversifiedRagChunks.length < 10) {
+        diversifiedRagChunks.push(c);
+      }
+    }
+  }
+
+  const flatResults = diversifiedRagChunks.map(c => ({
     chunkId: c.chunk_id,
     documentId: c.document_id,
     documentTitle: c.document_title,
