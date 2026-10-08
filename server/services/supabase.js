@@ -5,6 +5,7 @@ import { sampleCategories, sampleDocuments } from '../sampleData.js';
 
 import { fileURLToPath } from 'url';
 import { cosineSimilarity } from './ai.js';
+import { executeLayeredSearch } from './layeredSearch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -292,6 +293,11 @@ class LocalStore {
   }
 
   // Search
+  // 6-Layer Retrieval Pipeline (Document-Centric + RRF + Campus Glossary)
+  async searchLayered({ query, embedding, filters = {}, topK = 8 }) {
+    return await executeLayeredSearch(this.documents, query, embedding, filters, topK);
+  }
+
   async searchChunks({ query, embedding, filters = {}, topK = 8 }) {
     // 1. Coba RPC Supabase match_chunks jika live
     if (this.isSupabaseLive && embedding) {

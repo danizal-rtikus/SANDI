@@ -19,7 +19,9 @@ import {
   Scale,
   FileSearch,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FolderOpen,
+  Eye
 } from 'lucide-react';
 
 
@@ -134,6 +136,8 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
   const [loading, setLoading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [results, setResults] = useState(null);
+  const [documentResults, setDocumentResults] = useState(null);
+  const [queryInfo, setQueryInfo] = useState(null);
   const [ragAnswer, setRagAnswer] = useState(null);
   const [searchMeta, setSearchMeta] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState({});
@@ -179,6 +183,8 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
     setLoading(true);
     setRagAnswer(null);
     setIsSynthesizing(false);
+    setDocumentResults(null);
+    setQueryInfo(null);
 
     try {
       const res = await fetch('/api/search', {
@@ -198,10 +204,13 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
       if (!res.ok) throw new Error(data.error || 'Pencarian gagal');
 
       setResults(data.results || []);
+      setDocumentResults(data.documents || []);
+      setQueryInfo(data.queryInfo || null);
       setSearchMeta({
         searchId: data.searchId,
         latencyMs: data.latencyMs,
         resultsCount: data.resultsCount,
+        documentsCount: data.documentsCount || (data.documents ? data.documents.length : 0),
         answered: data.answered
       });
 
@@ -558,20 +567,159 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
         </div>
       )}
 
-      {/* Results Header */}
-      {results && (
-        <div className="results-header-info">
-          <div className="results-count-title">
-            Hasil Temuan Dokumen ({results.length})
-          </div>
-          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            Diurutkan berdasarkan skor kemiripan semantik tertinggi
+      {/* Glosarium Akademik Kampus Expansion Banner (Layer 1) */}
+      {queryInfo && queryInfo.expandedTerms && queryInfo.expandedTerms.length > (queryInfo.effectiveTokens?.length || 0) && (
+        <div 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.65rem', 
+            padding: '0.7rem 1rem', 
+            backgroundColor: 'var(--primary-purple-light)', 
+            border: '1px solid rgba(99, 102, 241, 0.25)', 
+            borderRadius: '10px', 
+            marginBottom: '1.25rem', 
+            fontSize: '0.82rem', 
+            color: 'var(--primary-purple-text)',
+            lineHeight: 1.45
+          }}
+        >
+          <BookOpenCheck size={18} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>Glosarium Akademik STIKOM Yos Sudarso:</strong> Penelusuran diperkaya secara otomatis dengan padanan istilah resmi:
+            <em> "{queryInfo.expandedTerms.join(', ')}"</em>
           </span>
         </div>
       )}
 
-      {/* Results List */}
-      {results && results.length > 0 ? (
+      {/* Results Header */}
+      {(documentResults || results) && (
+        <div className="results-header-info">
+          <div className="results-count-title">
+            Hasil Temuan Dokumen Resmi {documentResults ? `(${documentResults.length} Naskah)` : `(${results?.length || 0})`}
+          </div>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            Diurutkan berdasarkan skor agregasi dokumen dan fusi RRF (Reciprocal Rank Fusion)
+          </span>
+        </div>
+      )}
+
+      {/* Document-Centric Grouped Results (Layer 4) */}
+      {documentResults && documentResults.length > 0 ? (
+        <div className="results-list">
+          {documentResults.map((doc) => {
+            const docRelevancePercent = Math.round(doc.docScore * 100);
+            const topChunk = doc.chunks && doc.chunks.length > 0 ? doc.chunks[0] : null;
+
+            return (
+              <div key={doc.documentId} className="doc-group-card">
+                {/* Master Document Header */}
+                <div className="doc-group-header">
+                  <div className="result-doc-info" style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.45rem' }}>
+                      <FolderOpen size={20} color="var(--primary-purple)" style={{ flexShrink: 0 }} />
+                      <h3 className="result-doc-title" style={{ fontSize: '1.02rem', margin: 0, fontWeight: 700 }}>
+                        {doc.documentTitle}
+                      </h3>
+                    </div>
+                    <div className="result-meta-badges">
+                      <span className="badge badge-category">
+                        {doc.category}
+                      </span>
+                      {doc.docNumber && (
+                        <span className="badge" style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
+                          {doc.docNumber}
+                        </span>
+                      )}
+                      <span className="badge badge-page" style={{ fontWeight: 600 }}>
+                        {doc.totalMatchedPages} Halaman Terkait
+                      </span>
+                      <span className={`badge ${docRelevancePercent >= 75 ? 'badge-similarity-high' : 'badge-similarity-med'}`}>
+                        {docRelevancePercent}% Relevansi Dokumen
+                      </span>
+                    </div>
+                  </div>
+
+                  <button 
+                    className="btn-open-pdf"
+                    onClick={() => onOpenViewer(doc.documentId, topChunk?.page_number || 1, query, doc.documentTitle, topChunk?.content)}
+                    title="Buka Dokumen Utama di Halaman Relevan Teratas"
+                  >
+                    <ExternalLink size={15} />
+                    Buka Dokumen (hlm. {topChunk?.page_number || 1})
+                  </button>
+                </div>
+
+                {/* Sub-Pages & Clauses List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Klausul & Halaman Terkait ({doc.chunks.length} Potongan Teks):
+                  </div>
+
+                  {doc.chunks.map((chunk) => {
+                    const chunkSim = Math.round(chunk.similarity * 100);
+                    const isHelpful = feedbackSent[chunk.chunk_id];
+
+                    return (
+                      <div key={chunk.chunk_id} className="doc-clause-item">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span className="badge badge-page" style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem', fontWeight: 700 }}>
+                              Halaman {chunk.page_number}
+                            </span>
+                            {chunk.section_title && (
+                              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                                {chunk.section_title}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '0.73rem', color: 'var(--text-light)' }}>
+                              • {chunkSim}% Relevan
+                            </span>
+                          </div>
+
+                          <button 
+                            className="btn-feedback"
+                            style={{ padding: '0.28rem 0.6rem', fontSize: '0.75rem', gap: '0.35rem' }}
+                            onClick={() => onOpenViewer(doc.documentId, chunk.page_number, query, doc.documentTitle, chunk.content)}
+                            title={`Buka PDF tepat di Halaman ${chunk.page_number}`}
+                          >
+                            <Eye size={12} />
+                            Lihat Lembar Halaman
+                          </button>
+                        </div>
+
+                        <div className="result-snippet" style={{ margin: '0 0 0.5rem 0', background: 'var(--bg-card)', padding: '0.75rem 0.9rem', borderRadius: '6px' }}>
+                          {highlightQuery(chunk.content, query)}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-light)', marginRight: 4 }}>
+                            Relevan?
+                          </span>
+                          <button 
+                            className={`btn-feedback ${isHelpful === 'yes' ? 'active-yes' : ''}`}
+                            onClick={() => handleFeedback(searchMeta?.searchId, chunk.chunk_id, true)}
+                            title="Hasil sangat membantu"
+                          >
+                            <ThumbsUp size={12} />
+                          </button>
+                          <button 
+                            className={`btn-feedback ${isHelpful === 'no' ? 'active-no' : ''}`}
+                            onClick={() => handleFeedback(searchMeta?.searchId, chunk.chunk_id, false)}
+                            title="Kurang relevan"
+                          >
+                            <ThumbsDown size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : results && results.length > 0 ? (
         <div className="results-list">
           {results.map((r) => {
             const isHelpful = feedbackSent[r.chunkId];

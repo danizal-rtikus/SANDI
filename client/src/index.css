@@ -1263,6 +1263,49 @@ a {
   border-top: 1px solid var(--border-color);
 }
 
+/* Document-Centric Grouped Search Cards (Layer 4) */
+.doc-group-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.35rem;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 1.35rem;
+  transition: all 0.2s ease;
+}
+
+.doc-group-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: var(--shadow-md);
+}
+
+.doc-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.95rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+
+.doc-clause-item {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.75rem;
+  transition: background-color 0.15s ease;
+}
+
+.doc-clause-item:last-child {
+  margin-bottom: 0;
+}
+
+.doc-clause-item:hover {
+  background-color: rgba(99, 102, 241, 0.03);
+}
+
 .btn-open-pdf {
   display: inline-flex;
   align-items: center;

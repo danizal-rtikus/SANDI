@@ -355,7 +355,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 // ==============================================================================
 // 4. Pencarian Semantik & RAG (FR-20 s/d FR-33)
 // ==============================================================================
-// POST /api/search
+// POST /api/search (6-Layer Retrieval Pipeline: Glosarium, BM25 Strict \b, Vektor, RRF, Agregasi Dokumen)
 app.post('/api/search', async (req, res) => {
   const startTime = Date.now();
   try {
@@ -367,48 +367,40 @@ app.post('/api/search', async (req, res) => {
     // Dapatkan embedding vektor pertanyaan
     const queryVector = await getEmbedding(query);
 
-    // Cari chunk relevan
-    const rawResults = await dbStore.searchChunks({
+    // Jalankan 6-Layer Retrieval Pipeline (Glosarium, Leksikal BM25, Vektor, RRF, Agregasi Dokumen)
+    const outcome = await dbStore.searchLayered({
       query,
       embedding: queryVector,
       filters,
       topK
     });
 
+    const { documents = [], results = [], queryInfo = {} } = outcome;
+
     const latencyMs = Date.now() - startTime;
-    const topScore = rawResults.length > 0 ? rawResults[0].similarity : 0;
-    const answered = rawResults.length > 0 && topScore >= 0.50;
+    const topScore = documents.length > 0 ? documents[0].docScore : (results.length > 0 ? results[0].similarity : 0);
+    const answered = (documents.length > 0 && topScore >= 0.50) || (results.length > 0 && results[0].similarity >= 0.50);
 
     // Catat log pencarian (FR-44, Analitik)
     const log = await dbStore.logSearch({
       userId: req.body.userId,
       queryText: query,
       filters,
-      resultsCount: rawResults.length,
+      resultsCount: results.length,
       topScore,
       answered,
       latencyMs
     });
 
-    // Format respons sesuai kontrak API PRD Section 11
-    const results = rawResults.map(r => ({
-      chunkId: r.chunk_id,
-      documentId: r.document_id,
-      documentTitle: r.document_title,
-      category: r.category_name,
-      pageNumber: r.page_number,
-      sectionTitle: r.section_title || '',
-      snippet: r.content,
-      similarity: r.similarity,
-      viewerUrl: `/viewer/${r.document_id}?page=${r.page_number}&q=${encodeURIComponent(query)}`
-    }));
-
     res.json({
       searchId: log.id,
       latencyMs,
       resultsCount: results.length,
+      documentsCount: documents.length,
       answered,
-      results
+      queryInfo,
+      documents, // Struktur teragregasi per dokumen resmi (Layer 4)
+      results    // Flat chunks untuk backward-compatibility & RAG prompt
     });
   } catch (error) {
     console.error('Error during search:', error);
