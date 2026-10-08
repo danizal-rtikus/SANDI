@@ -181,6 +181,108 @@ Informasi spesifik terkait pertanyaan ini belum ditemukan dalam naskah dokumen S
 }
 
 /**
+ * Menyusun telaah dokumen mutu menggunakan DeepSeek via SumoPod AI dengan Streaming Real-Time
+ * @param {string} query
+ * @param {Array} retrievedChunks
+ * @param {Function} onToken - Callback saat token baru diterima (chunk)
+ * @returns {Promise<{ answer: string, citations: Array }>}
+ */
+export async function generateRagAnswerStream(query, retrievedChunks = [], onToken = () => {}) {
+  const citations = (retrievedChunks || []).slice(0, 5).map(chunk => ({
+    chunkId: chunk.chunk_id || chunk.chunkId,
+    documentId: chunk.document_id || chunk.documentId,
+    documentTitle: chunk.document_title || chunk.documentTitle,
+    pageNumber: chunk.page_number || chunk.pageNumber,
+    sectionTitle: chunk.section_title || chunk.sectionTitle || '',
+    snippet: (chunk.content || chunk.snippet || '').substring(0, 320)
+  }));
+
+  if (!retrievedChunks || retrievedChunks.length === 0) {
+    const noDocAnswer = `### Ketetapan Pokok\nInformasi terkait penelusuran ini belum ditemukan dalam naskah dokumen SPMI STIKOM Yos Sudarso yang terdaftar.\n\n### Saran\nPastikan kata kunci sesuai dengan istilah baku SPMI (seperti AMI, PPEPP, Standar, Kebijakan, SOP).`;
+    for (const char of noDocAnswer) {
+      onToken(char);
+    }
+    return { answer: noDocAnswer, citations: [] };
+  }
+
+  // Format context text
+  const contextText = retrievedChunks.slice(0, 5).map((c, i) => {
+    const docTitle = c.document_title || c.documentTitle;
+    const pageNum = c.page_number || c.pageNumber;
+    const secTitle = c.section_title || c.sectionTitle || 'Klausul Regulasi';
+    const text = c.content || c.snippet || '';
+    return `[DOKUMEN ${i + 1}]: ${docTitle} | Halaman: ${pageNum} | Bab/Pasal: ${secTitle}\nIsi:\n${text}`;
+  }).join('\n\n---\n\n');
+
+  try {
+    const stream = await aiClient.chat.completions.create({
+      model: chatModel,
+      messages: [
+        {
+          role: 'system',
+          content: `Anda adalah SANDI AI (Sistem Arsip & Navigasi Dokumen Internal) untuk STIKOM Yos Sudarso Purwokerto.
+Tugas Anda: Menyusun laporan telaah dokumen mutu SPMI secara objektif, lugas, dan faktual berdasarkan konteks yang diberikan.
+
+PANDUAN FORMAT WAJIB (Gunakan format persis berikut):
+### Ketetapan Pokok
+[Tuliskan 1-2 kalimat ringkasan inti ketetapan hukum/kebijakan formalnya]
+
+### Rincian Prosedur & Ketentuan
+- [Poin rincian ketentuan 1]
+- [Poin rincian ketentuan 2]
+- [Poin rincian ketentuan 3]
+
+### Rujukan Dokumen Resmi
+- [Nama Dokumen], Halaman [X]
+
+Jika dokumen yang disediakan tidak memuat jawaban sama sekali, tuliskan:
+### Ketetapan Pokok
+Informasi spesifik terkait pertanyaan ini belum ditemukan dalam naskah dokumen SPMI yang terindeks saat ini.`
+        },
+        {
+          role: 'user',
+          content: `Pertanyaan Penelusuran:\n"${query}"\n\nNaskah Dokumen Konteks:\n${contextText}\n\nLaporan Telaah Dokumen Mutu:`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 2000,
+      stream: true
+    });
+
+    let fullAnswer = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || '';
+      if (delta) {
+        fullAnswer += delta;
+        onToken(delta);
+      }
+    }
+
+    if (fullAnswer.trim().length > 20) {
+      return { answer: fullAnswer.trim(), citations };
+    }
+  } catch (err) {
+    console.warn('⚠️ Gagal streaming via SumoPod AI, beralih ke fallback deterministik:', err.message);
+  }
+
+  // Fallback deterministik jika stream gagal
+  const top = citations[0];
+  const cleanedSnippet = (top?.snippet || '')
+    .replace(/SEKOLAH TINGGI ILMU KOMPUTER YOS SUDARSO/gi, '')
+    .replace(/PROSEDUR SPMI|KEBIJAKAN SPMI|STANDAR SPMI/gi, '')
+    .replace(/Kode Dok\s*:[^\n]+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const fallbackAnswer = `### Ketetapan Pokok\nKetentuan mengenai topik ini tercantum dalam naskah resmi **${top?.documentTitle || 'SPMI'}** (Halaman ${top?.pageNumber || 1}).\n\n### Rincian Naskah\n${cleanedSnippet.substring(0, 320)}...\n\n### Rujukan Dokumen Resmi\n- **${top?.documentTitle || 'SPMI'}**, Halaman ${top?.pageNumber || 1}`;
+
+  for (const char of fallbackAnswer) {
+    onToken(char);
+  }
+  return { answer: fallbackAnswer, citations };
+}
+
+/**
  * Membaca dan mentranskripsi halaman PDF scan / gambar menggunakan deepseek-v4-flash-vision-exp
  * Digunakan untuk mengenali teks pada lembar berkas fisik / scan yang buram atau bertabel
  * @param {string} base64Image

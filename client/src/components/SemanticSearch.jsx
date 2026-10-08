@@ -40,15 +40,30 @@ export const highlightQuery = (text, query) => {
   }
 };
 
-export const renderStructuredAnswer = (rawText) => {
-  if (!rawText) return null;
+export const renderStructuredAnswer = (rawText, isStreaming = false) => {
+  if (!rawText && !isStreaming) return null;
 
   // Split by markdown h3 sections (### Section)
-  const sections = rawText.split(/(?=###\s+)/g);
+  const sections = (rawText || '').split(/(?=###\s+)/g).filter(Boolean);
+
+  if (sections.length === 0 && isStreaming) {
+    return (
+      <div className="rag-structured-body">
+        <div className="rag-section-card">
+          <div className="rag-section-content">
+            <p className="rag-paragraph" style={{ color: 'var(--text-muted)' }}>
+              Menghubungkan ke SumoPod AI... <span className="rag-cursor-blink">▍</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rag-structured-body">
       {sections.map((sec, idx) => {
+        const isLastSection = idx === sections.length - 1;
         const lines = sec.trim().split('\n').filter(Boolean);
         if (lines.length === 0) return null;
         const firstLine = lines[0].trim();
@@ -65,12 +80,16 @@ export const renderStructuredAnswer = (rawText) => {
             )}
             <div className="rag-section-content">
               {contentLines.map((line, lIdx) => {
+                const isLastLine = isLastSection && lIdx === contentLines.length - 1;
                 const trimmed = line.trim();
                 if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
                   return (
                     <div key={lIdx} className="rag-bullet-item">
                       <span className="rag-bullet-dot">•</span>
-                      <span>{trimmed.substring(2)}</span>
+                      <span>
+                        {trimmed.substring(2)}
+                        {isLastLine && isStreaming && <span className="rag-cursor-blink">▍</span>}
+                      </span>
                     </div>
                   );
                 }
@@ -78,12 +97,14 @@ export const renderStructuredAnswer = (rawText) => {
                   return (
                     <blockquote key={lIdx} className="rag-blockquote">
                       {trimmed.substring(2)}
+                      {isLastLine && isStreaming && <span className="rag-cursor-blink">▍</span>}
                     </blockquote>
                   );
                 }
                 return (
                   <p key={lIdx} className="rag-paragraph">
                     {trimmed}
+                    {isLastLine && isStreaming && <span className="rag-cursor-blink">▍</span>}
                   </p>
                 );
               })}
@@ -172,27 +193,94 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
         answered: data.answered
       });
 
-      // Panggil generasi jawaban RAG jika ada hasil
+      // Panggil generasi jawaban RAG streaming jika ada hasil
       if (data.results && data.results.length > 0) {
         setIsSynthesizing(true);
-        fetch('/api/answer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: activeQuery,
-            results: data.results
-          })
-        })
-          .then(r => r.json())
-          .then(ansData => {
-            setRagAnswer(ansData);
-          })
-          .catch(err => {
-            console.error('Error generating answer:', err);
-          })
-          .finally(() => {
-            setIsSynthesizing(false);
+        setRagAnswer({ query: activeQuery, answer: '', citations: [], isStreaming: true });
+
+        try {
+          const streamRes = await fetch('/api/answer/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: activeQuery,
+              results: data.results
+            })
           });
+
+          if (!streamRes.ok || !streamRes.body) {
+            throw new Error('Streaming tidak didukung, menggunakan fallback');
+          }
+
+          const reader = streamRes.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let accumulatedAnswer = '';
+          let currentCitations = [];
+          let textBuffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            textBuffer += decoder.decode(value, { stream: true });
+            const lines = textBuffer.split('\n');
+            textBuffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data: ')) continue;
+              const jsonStr = trimmed.slice(6);
+              try {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed.type === 'citations') {
+                  currentCitations = parsed.citations || [];
+                  setRagAnswer(prev => ({
+                    ...(prev || {}),
+                    query: activeQuery,
+                    citations: currentCitations
+                  }));
+                } else if (parsed.type === 'token') {
+                  accumulatedAnswer += parsed.token;
+                  setRagAnswer({
+                    query: activeQuery,
+                    answer: accumulatedAnswer,
+                    citations: currentCitations,
+                    isStreaming: true
+                  });
+                } else if (parsed.type === 'done') {
+                  accumulatedAnswer = parsed.answer || accumulatedAnswer;
+                  setRagAnswer({
+                    query: activeQuery,
+                    answer: accumulatedAnswer,
+                    citations: parsed.citations || currentCitations,
+                    isStreaming: false
+                  });
+                }
+              } catch (parseErr) {
+                // Abaikan potongan JSON parsial
+              }
+            }
+          }
+        } catch (streamErr) {
+          console.warn('Streaming error, fallback ke endpoint statis /api/answer:', streamErr);
+          try {
+            const fallbackRes = await fetch('/api/answer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                query: activeQuery,
+                results: data.results
+              })
+            });
+            const ansData = await fallbackRes.json();
+            setRagAnswer(ansData);
+          } catch (fbErr) {
+            console.error('Error in static answer fallback:', fbErr);
+          }
+        } finally {
+          setIsSynthesizing(false);
+          setRagAnswer(prev => (prev ? { ...prev, isStreaming: false } : null));
+        }
       }
     } catch (err) {
       console.error(err);
@@ -323,8 +411,8 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
         </div>
       </div>
 
-      {/* Audit Progress Steps & Skeleton Loader (Opsi B) */}
-      {isSynthesizing && !ragAnswer && (
+      {/* Audit Progress Steps & Skeleton Loader */}
+      {isSynthesizing && (!ragAnswer || !ragAnswer.answer) && (
         <div className="rag-skeleton-card">
           <div className="rag-skeleton-header">
             <div className="rag-skeleton-title-wrap">
@@ -377,13 +465,18 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
       )}
 
       {/* RAG Answer Summary Card (FR-30, FR-31) */}
-      {ragAnswer && (
+      {ragAnswer && (ragAnswer.answer || !isSynthesizing) && (
         <div className="rag-answer-box-pro">
           <div className="rag-header-pro">
             <div className="rag-header-left">
               <div className="rag-title-badge-pro">
                 <BookOpenCheck size={19} />
                 <span>Hasil Telaah Regulasi & Dokumen SPMI</span>
+                {ragAnswer.isStreaming && (
+                  <span className="rag-streaming-pulse">
+                    <span className="pulse-dot"></span> Mengetik...
+                  </span>
+                )}
               </div>
               <span className="rag-subtitle-pro">
                 Disintesis secara objektif dan faktual dari naskah resmi STIKOM Yos Sudarso
@@ -395,6 +488,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
               className="btn-copy-rag-pro"
               onClick={handleCopyAnswer}
               title="Salin hasil telaah ini ke clipboard"
+              disabled={ragAnswer.isStreaming}
             >
               {copiedAnswer ? <Check size={14} color="#16a34a" /> : <Copy size={14} />}
               <span>{copiedAnswer ? 'Tersalin!' : 'Salin Telaah'}</span>
@@ -402,7 +496,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           </div>
 
           <div className="rag-content-pro">
-            {renderStructuredAnswer(ragAnswer.answer)}
+            {renderStructuredAnswer(ragAnswer.answer, ragAnswer.isStreaming)}
           </div>
 
           {ragAnswer.citations && ragAnswer.citations.length > 0 && (

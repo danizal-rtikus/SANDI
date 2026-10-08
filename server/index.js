@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 import { dbStore, supabase } from './services/supabase.js';
 import { processPdfBuffer, computeSha256 } from './services/pdfProcessor.js';
-import { getEmbedding, generateRagAnswer } from './services/ai.js';
+import { getEmbedding, generateRagAnswer, generateRagAnswerStream } from './services/ai.js';
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -173,16 +173,22 @@ app.post('/api/documents', upload.single('file'), async (req, res) => {
       pages_total: parsed.pageCount
     });
 
-    // Proses embedding untuk setiap chunk
+    // Proses embedding untuk setiap chunk secara paralel menggunakan Promise.all (Batch 5)
+    const BATCH_SIZE = 5;
     const chunksWithEmbeddings = [];
-    for (let i = 0; i < parsed.chunks.length; i++) {
-      const c = parsed.chunks[i];
-      const embedding = await getEmbedding(c.embedding_input || c.content);
-      chunksWithEmbeddings.push({
-        ...c,
-        embedding,
-        embedding_model: 'gemini-embedding-001@768'
-      });
+    for (let i = 0; i < parsed.chunks.length; i += BATCH_SIZE) {
+      const slice = parsed.chunks.slice(i, i + BATCH_SIZE);
+      const batchEmbeddings = await Promise.all(
+        slice.map(async (c) => {
+          const embedding = await getEmbedding(c.embedding_input || c.content);
+          return {
+            ...c,
+            embedding,
+            embedding_model: 'gemini-embedding-001@768'
+          };
+        })
+      );
+      chunksWithEmbeddings.push(...batchEmbeddings);
     }
 
     await dbStore.updateJob(job.id, {
@@ -421,6 +427,53 @@ app.post('/api/answer', async (req, res) => {
   } catch (error) {
     console.error('Error generating answer:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/answer/stream (RAG Answer Generation dengan Streaming SSE)
+app.post('/api/answer/stream', async (req, res) => {
+  try {
+    const { query, results } = req.body;
+    if (!query) {
+      return res.status(400).json({ error: 'Query wajib disertakan' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
+
+    // Ekstraksi citations awal
+    const citations = (results || []).slice(0, 5).map(chunk => ({
+      chunkId: chunk.chunk_id || chunk.chunkId,
+      documentId: chunk.document_id || chunk.documentId,
+      documentTitle: chunk.document_title || chunk.documentTitle,
+      pageNumber: chunk.page_number || chunk.pageNumber,
+      sectionTitle: chunk.section_title || chunk.sectionTitle || '',
+      snippet: (chunk.content || chunk.snippet || '').substring(0, 320)
+    }));
+
+    // Kirim sitasi referensi terlebih dahulu
+    res.write(`data: ${JSON.stringify({ type: 'citations', citations })}\n\n`);
+
+    // Stream token secara real-time
+    const { answer } = await generateRagAnswerStream(query, results || [], (token) => {
+      res.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'done', answer, citations })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Error during streaming answer:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.end();
+    }
   }
 });
 

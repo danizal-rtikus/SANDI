@@ -711,6 +711,49 @@ a {
   transition: all 0.2s ease;
 }
 
+/* RAG Streaming Cursor & Indicator */
+.rag-streaming-pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-left: 10px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #7c3aed;
+  animation: pulseDot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.rag-cursor-blink {
+  display: inline-block;
+  color: #7c3aed;
+  font-weight: 800;
+  font-size: 1.05em;
+  margin-left: 3px;
+  animation: cursorBlink 0.75s infinite;
+  vertical-align: baseline;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
