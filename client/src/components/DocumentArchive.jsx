@@ -1,28 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
-  ExternalLink, 
   RefreshCw, 
   Search, 
-  ShieldCheck, 
-  Hash, 
-  Calendar, 
   Eye, 
   CheckCircle, 
-  AlertTriangle,
-  FolderOpen,
-  FileEdit,
-  Trash2
+  FolderOpen, 
+  FileEdit, 
+  Trash2,
+  BookOpen,
+  Target,
+  Workflow,
+  Users,
+  FileCheck2,
+  X,
+  Layers
 } from 'lucide-react';
 import DocumentEditModal from './DocumentEditModal';
 import DocumentDeleteModal from './DocumentDeleteModal';
+
+const CATEGORIES = [
+  { id: 'all', name: 'Semua Dokumen', icon: FolderOpen, desc: 'Seluruh koleksi dokumen kebijakan, manual, standar, SOP, dan pedoman SPMI STIKOM Yos Sudarso' },
+  { id: '1', name: 'Kebijakan SPMI', icon: FileText, desc: 'Dokumen arah kebijakan pokok penjaminan mutu, Statuta, dan Rencana Strategis (Renstra)' },
+  { id: '2', name: 'Manual Mutu', icon: BookOpen, desc: 'Pedoman tata kelola dan implementasi siklus PPEPP penjaminan mutu internal' },
+  { id: '3', name: 'Standar SPMI', icon: Target, desc: 'Tolak ukur dan kriteria mutu pembelajaran, penelitian, pengabdian masyarakat, dan tata kelola' },
+  { id: '4', name: 'SOP (Prosedur)', icon: Workflow, desc: 'Standar Operasional Prosedur teknis pelaksanaan kegiatan akademik dan administratif' },
+  { id: '5', name: 'Pedoman SDM & Akademik', icon: Users, desc: 'Pedoman kode etik, kualifikasi dosen/tendik, kenaikan jabatan, dan tata tertib' },
+  { id: '6', name: 'Formulir & Instrumen', icon: FileCheck2, desc: 'Instrumen evaluasi, borang audit mutu internal (AMI), dan verifikasi mutu' }
+];
 
 export default function DocumentArchive({ onOpenViewer, onShowToast, userRole }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [selectedDocDetails, setSelectedDocDetails] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('all');
   const [reindexingId, setReindexingId] = useState(null);
 
   // Modals state for admin
@@ -62,33 +73,35 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
     }
   };
 
-  const handleToggleActive = async (docId, currentActive) => {
-    try {
-      const res = await fetch(`/api/documents/${docId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentActive })
-      });
-      if (res.ok) {
-        onShowToast(`Status dokumen berhasil diperbarui`);
-        fetchDocuments();
+  // Hitung jumlah dokumen per kategori secara dinamis
+  const categoryCounts = useMemo(() => {
+    const counts = { all: documents.length };
+    CATEGORIES.forEach(cat => {
+      if (cat.id !== 'all') {
+        counts[cat.id] = documents.filter(doc => String(doc.category_id) === String(cat.id)).length;
       }
-    } catch (err) {
-      onShowToast('Gagal memperbarui status dokumen');
-    }
-  };
+    });
+    return counts;
+  }, [documents]);
 
-  const filteredDocs = documents.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      (doc.doc_number && doc.doc_number.toLowerCase().includes(searchFilter.toLowerCase()));
-    const matchesCat = !categoryFilter || String(doc.category_id) === String(categoryFilter);
-    return matchesSearch && matchesCat;
-  });
+  // Filter dokumen berdasarkan Tab Kategori aktif dan Search Bar
+  const filteredDocs = useMemo(() => {
+    return documents.filter(doc => {
+      const matchesCategory = activeCategory === 'all' || String(doc.category_id) === String(activeCategory);
+      const matchesSearch = !searchFilter.trim() || 
+        doc.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
+        (doc.doc_number && doc.doc_number.toLowerCase().includes(searchFilter.toLowerCase()));
+      return matchesCategory && matchesSearch;
+    });
+  }, [documents, activeCategory, searchFilter]);
 
+  const activeCategoryObj = CATEGORIES.find(c => c.id === activeCategory) || CATEGORIES[0];
+  const ActiveIcon = activeCategoryObj.icon;
   const isAdmin = userRole === 'admin';
 
   return (
     <div>
+      {/* Header Block */}
       <div className="dashboard-header-block">
         <div>
           <div className="dashboard-heading-title">
@@ -113,38 +126,84 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
         </button>
       </div>
 
-      {/* Toolbar */}
-      <div className="sirena-card" style={{ padding: '1.25rem', marginBottom: '1.25rem' }}>
-        <div className="catalog-toolbar" style={{ margin: 0 }}>
-        <div style={{ display: 'flex', gap: '0.75rem', flex: 1 }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
-            <Search size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: 12, top: 12 }} />
-            <input 
-              type="text" 
-              className="catalog-search-input"
-              style={{ width: '100%', paddingLeft: '2.25rem' }}
-              placeholder="Cari judul atau nomor dokumen..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-            />
-          </div>
+      {/* Category Pill Tabs */}
+      <div className="category-tabs-container">
+        {CATEGORIES.map(cat => {
+          const IconComp = cat.icon;
+          const count = categoryCounts[cat.id] || 0;
+          const isActive = activeCategory === cat.id;
 
-          <select 
-            className="filter-select"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="">Semua Kategori</option>
-            <option value="1">Kebijakan SPMI</option>
-            <option value="2">Manual Mutu</option>
-            <option value="3">Standar SPMI</option>
-            <option value="4">SOP (Prosedur Operasional)</option>
-            <option value="5">Pedoman SDM & Akademik</option>
-            <option value="6">Formulir & Instrumen</option>
-          </select>
+          return (
+            <button
+              key={cat.id}
+              className={`category-tab-btn ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveCategory(cat.id)}
+            >
+              <IconComp size={15} />
+              <span>{cat.name}</span>
+              <span className="category-tab-count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Contextual Category Info Banner */}
+      <div className="category-banner-info">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <ActiveIcon size={17} style={{ flexShrink: 0 }} />
+          <span>
+            <strong>{activeCategoryObj.name}:</strong> {activeCategoryObj.desc}
+          </span>
+        </div>
+        <div style={{ fontWeight: 700, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+          {filteredDocs.length} dari {documents.length} Dokumen
         </div>
       </div>
-    </div>
+
+      {/* Search Bar & Stats */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: '440px' }}>
+          <Search 
+            size={16} 
+            color="var(--text-subtle)" 
+            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} 
+          />
+          <input 
+            type="text" 
+            className="catalog-search-input"
+            style={{ width: '100%', paddingLeft: '2.3rem', paddingRight: searchFilter ? '2.3rem' : '0.8rem' }}
+            placeholder={activeCategory === 'all' ? "Cari judul atau nomor dokumen..." : `Cari di ${activeCategoryObj.name}...`}
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+          />
+          {searchFilter && (
+            <button 
+              onClick={() => setSearchFilter('')}
+              style={{ 
+                position: 'absolute', 
+                right: 10, 
+                top: '50%', 
+                transform: 'translateY(-50%)', 
+                background: 'transparent', 
+                border: 'none', 
+                cursor: 'pointer', 
+                color: 'var(--text-light)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px'
+              }}
+              title="Hapus filter pencarian"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+          Menampilkan <strong style={{ color: 'var(--text-main)' }}>{filteredDocs.length}</strong> dokumen
+        </div>
+      </div>
 
       {/* Table */}
       <div className="catalog-table-wrap">
@@ -165,7 +224,7 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
                 <tr key={doc.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-                      <FileText size={18} color="var(--brand-primary)" style={{ flexShrink: 0, marginTop: 2 }} />
+                      <FileText size={18} color="var(--primary-purple)" style={{ flexShrink: 0, marginTop: 2 }} />
                       <div>
                         <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.92rem' }}>
                           {doc.title}
@@ -264,8 +323,18 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
               ))
             ) : (
               <tr>
-                <td colSpan="6" style={{ textAlign: 'center', padding: '2.5rem' }}>
-                  Tidak ada dokumen yang sesuai dengan kata kunci pencarian.
+                <td colSpan="6" style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                    <ActiveIcon size={32} color="var(--text-light)" />
+                    <span style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-main)' }}>
+                      Tidak ada dokumen yang ditemukan
+                    </span>
+                    <span style={{ fontSize: '0.82rem' }}>
+                      {searchFilter 
+                        ? `Tidak ada dokumen yang sesuai dengan kata kunci "${searchFilter}" pada tab ${activeCategoryObj.name}.`
+                        : `Belum ada dokumen yang terdaftar dalam kategori ${activeCategoryObj.name}.`}
+                    </span>
+                  </div>
                 </td>
               </tr>
             )}
