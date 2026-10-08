@@ -216,9 +216,27 @@ class LocalStore {
   async updateDocument(id, updates) {
     if (this.isSupabaseLive) {
       try {
-        await supabase.from('documents').update(updates).eq('id', id);
+        const allowedColumns = [
+          'title', 'doc_number', 'category_id', 'year', 'version', 
+          'description', 'access', 'status', 'is_active', 'storage_path', 
+          'file_size_bytes', 'checksum_sha256', 'page_count', 'supersedes_id', 
+          'uploaded_by'
+        ];
+        const dbUpdates = {};
+        for (const [k, v] of Object.entries(updates)) {
+          if (allowedColumns.includes(k)) {
+            dbUpdates[k] = v;
+          }
+        }
+        dbUpdates.updated_at = new Date().toISOString();
+        if (Object.keys(dbUpdates).length > 1) {
+          const { error } = await supabase.from('documents').update(dbUpdates).eq('id', id);
+          if (error) {
+            console.warn('⚠️ Supabase document update note:', error.message);
+          }
+        }
       } catch (e) {
-        // fallback
+        console.warn('⚠️ Supabase document update catch:', e.message);
       }
     }
 

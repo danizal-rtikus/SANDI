@@ -97,13 +97,15 @@ export default function DocumentEditModal({ isOpen, document: doc, onClose, onSa
   };
 
   return (
-    <div className="pdf-modal-overlay" style={{ zIndex: 1200 }}>
+    <div className="pdf-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
       <div 
         className="sirena-card"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '560px',
           maxHeight: '90vh',
+          background: 'var(--bg-card, #ffffff)',
           display: 'flex',
           flexDirection: 'column',
           padding: '1.75rem',

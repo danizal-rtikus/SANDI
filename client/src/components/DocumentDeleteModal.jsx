@@ -38,12 +38,14 @@ export default function DocumentDeleteModal({ isOpen, document: doc, onClose, on
   };
 
   return (
-    <div className="pdf-modal-overlay" style={{ zIndex: 1200 }}>
+    <div className="pdf-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
       <div 
         className="sirena-card"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '460px',
+          background: 'var(--bg-card, #ffffff)',
           padding: '1.75rem',
           position: 'relative',
           borderRadius: '16px',

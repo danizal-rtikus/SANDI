@@ -62,12 +62,14 @@ export default function AdminLoginModal({ isOpen, onClose, onLoginSuccess }) {
   };
 
   return (
-    <div className="pdf-modal-overlay" style={{ zIndex: 1200 }}>
+    <div className="pdf-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
       <div 
         className="sirena-card"
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
           maxWidth: '440px',
+          background: 'var(--bg-card, #ffffff)',
           padding: '2rem',
           position: 'relative',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',

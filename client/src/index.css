@@ -1432,6 +1432,22 @@ a {
   padding: 1.25rem;
 }
 
+/* Modal Universal Overlay (Login, Edit, Hapus) */
+.pdf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  overflow-y: auto;
+  animation: fadeIn 0.2s ease-out;
+}
+
 .modal-dialog {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
