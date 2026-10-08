@@ -3,12 +3,17 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { sampleCategories, sampleDocuments } from '../sampleData.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const supabaseUrl = process.env.SUPABASE_URL || 'https://fznhvuyplojsvcodxfkk.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_8kuEfbZU64XFihkNdDI7gQ_jpRHGc6e';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-const DATA_DIR = path.resolve('server/data');
+const DATA_DIR = path.join(__dirname, '../data');
 const PERSISTED_FILE = path.join(DATA_DIR, 'persisted_documents.json');
 
 // In-memory / local state fallback jika tabel Supabase belum dimigrasi

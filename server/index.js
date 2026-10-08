@@ -500,6 +500,21 @@ app.get('/api/suggested-queries', async (req, res) => {
   }
 });
 
+// ==============================================================================
+// 5. Frontend Static Serving (Production / Docker / Coolify)
+// ==============================================================================
+const clientDist = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+  console.log('🌐 Frontend static build dimuat dari:', clientDist);
+}
+
 // Start Express Server
 app.listen(PORT, () => {
   console.log(`🚀 Server SANDI (STIKOM Yos Sudarso) aktif di port ${PORT}`);
