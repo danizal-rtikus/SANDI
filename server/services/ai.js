@@ -250,16 +250,24 @@ Informasi spesifik terkait pertanyaan ini belum ditemukan dalam naskah dokumen S
     });
 
     let fullAnswer = '';
+    let fullThinking = '';
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content || '';
-      if (delta) {
-        fullAnswer += delta;
-        onToken(delta);
+      const delta = chunk.choices[0]?.delta;
+      if (!delta) continue;
+
+      if (delta.reasoning_content) {
+        fullThinking += delta.reasoning_content;
+        onToken({ type: 'thinking', token: delta.reasoning_content });
+      }
+
+      if (delta.content) {
+        fullAnswer += delta.content;
+        onToken({ type: 'token', token: delta.content });
       }
     }
 
     if (fullAnswer.trim().length > 20) {
-      return { answer: fullAnswer.trim(), citations };
+      return { answer: fullAnswer.trim(), citations, thinking: fullThinking };
     }
   } catch (err) {
     console.warn('⚠️ Gagal streaming via SumoPod AI, beralih ke fallback deterministik:', err.message);

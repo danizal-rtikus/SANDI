@@ -15,7 +15,10 @@ import {
   HelpCircle,
   Copy,
   Check,
-  Loader2
+  Loader2,
+  Sparkles,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 
@@ -127,6 +130,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
   const [searchMeta, setSearchMeta] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState({});
   const [copiedAnswer, setCopiedAnswer] = useState(false);
+  const [showThinking, setShowThinking] = useState(true);
   const [popularQueries, setPopularQueries] = useState([
     "Apa luas lingkup penjaminan mutu SPMI di STIKOM Yos Sudarso?",
     "Statuta dan landasan hukum yang dirujuk dalam Kebijakan SPMI",
@@ -196,7 +200,19 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
       // Panggil generasi jawaban RAG streaming jika ada hasil
       if (data.results && data.results.length > 0) {
         setIsSynthesizing(true);
-        setRagAnswer({ query: activeQuery, answer: '', citations: [], isStreaming: true });
+        setRagAnswer({
+          query: activeQuery,
+          answer: '',
+          thinking: '',
+          citations: data.results.slice(0, 5).map(r => ({
+            documentId: r.documentId,
+            documentTitle: r.documentTitle,
+            pageNumber: r.pageNumber,
+            snippet: r.snippet
+          })),
+          isStreaming: true,
+          isThinking: true
+        });
 
         try {
           const streamRes = await fetch('/api/answer/stream', {
@@ -215,6 +231,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           const reader = streamRes.body.getReader();
           const decoder = new TextDecoder('utf-8');
           let accumulatedAnswer = '';
+          let accumulatedThinking = '';
           let currentCitations = [];
           let textBuffer = '';
 
@@ -239,22 +256,38 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
                     query: activeQuery,
                     citations: currentCitations
                   }));
+                } else if (parsed.type === 'thinking') {
+                  accumulatedThinking += parsed.token;
+                  setRagAnswer(prev => ({
+                    ...(prev || {}),
+                    query: activeQuery,
+                    thinking: accumulatedThinking,
+                    citations: currentCitations.length > 0 ? currentCitations : (prev?.citations || []),
+                    isThinking: true,
+                    isStreaming: true
+                  }));
                 } else if (parsed.type === 'token') {
                   accumulatedAnswer += parsed.token;
-                  setRagAnswer({
+                  setRagAnswer(prev => ({
+                    ...(prev || {}),
                     query: activeQuery,
                     answer: accumulatedAnswer,
-                    citations: currentCitations,
+                    thinking: accumulatedThinking,
+                    citations: currentCitations.length > 0 ? currentCitations : (prev?.citations || []),
+                    isThinking: false,
                     isStreaming: true
-                  });
+                  }));
                 } else if (parsed.type === 'done') {
                   accumulatedAnswer = parsed.answer || accumulatedAnswer;
-                  setRagAnswer({
+                  setRagAnswer(prev => ({
+                    ...(prev || {}),
                     query: activeQuery,
                     answer: accumulatedAnswer,
-                    citations: parsed.citations || currentCitations,
+                    thinking: parsed.thinking || accumulatedThinking,
+                    citations: parsed.citations || currentCitations || (prev?.citations || []),
+                    isThinking: false,
                     isStreaming: false
-                  });
+                  }));
                 }
               } catch (parseErr) {
                 // Abaikan potongan JSON parsial
@@ -279,7 +312,7 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
           }
         } finally {
           setIsSynthesizing(false);
-          setRagAnswer(prev => (prev ? { ...prev, isStreaming: false } : null));
+          setRagAnswer(prev => (prev ? { ...prev, isStreaming: false, isThinking: false } : null));
         }
       }
     } catch (err) {
@@ -411,68 +444,20 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
         </div>
       </div>
 
-      {/* Audit Progress Steps & Skeleton Loader */}
-      {isSynthesizing && (!ragAnswer || !ragAnswer.answer) && (
-        <div className="rag-skeleton-card">
-          <div className="rag-skeleton-header">
-            <div className="rag-skeleton-title-wrap">
-              <div className="rag-skeleton-badge">
-                <Loader2 size={17} className="spin-slow" />
-                <span>Menyusun Telaah Dokumen SPMI...</span>
-              </div>
-              <span className="rag-skeleton-subtitle">
-                Sistem sedang membedah klausul regulasi dan merumuskan telaah objektif naskah STIKOM Yos Sudarso
-              </span>
-            </div>
-          </div>
-
-          {/* Audit Progress Steps */}
-          <div className="rag-steps-box">
-            <div className="rag-step-item done">
-              <CheckCircle2 size={15} color="#16a34a" />
-              <span>
-                Penelusuran {searchMeta?.resultsCount || results?.length || 8} naskah dokumen SPMI selesai ({searchMeta?.latencyMs || 230} ms)
-              </span>
-            </div>
-            <div className="rag-step-item active">
-              <Loader2 size={14} className="spin-slow" color="#0284c7" />
-              <span>Menelaah pasal resmi & menyintesis ketetapan formal...</span>
-            </div>
-          </div>
-
-          {/* Skeleton Lines with Shimmer */}
-          <div className="rag-skeleton-content">
-            <div className="skeleton-section-block">
-              <div className="skeleton-badge-line" />
-              <div className="skeleton-line skeleton-w-full" />
-              <div className="skeleton-line skeleton-w-85" />
-            </div>
-
-            <div className="skeleton-section-block">
-              <div className="skeleton-badge-line" />
-              <div className="skeleton-line skeleton-w-95" />
-              <div className="skeleton-line skeleton-w-75" />
-              <div className="skeleton-line skeleton-w-80" />
-            </div>
-
-            <div className="skeleton-chips-block">
-              <div className="skeleton-chip" />
-              <div className="skeleton-chip" />
-              <div className="skeleton-chip" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RAG Answer Summary Card (FR-30, FR-31) */}
-      {ragAnswer && (ragAnswer.answer || !isSynthesizing) && (
+      {/* RAG Answer Box Pro - Langsung Muncul Dinamis (Tanpa Skeleton Lama) */}
+      {(ragAnswer || isSynthesizing) && (
         <div className="rag-answer-box-pro">
           <div className="rag-header-pro">
             <div className="rag-header-left">
               <div className="rag-title-badge-pro">
                 <BookOpenCheck size={19} />
                 <span>Hasil Telaah Regulasi & Dokumen SPMI</span>
-                {ragAnswer.isStreaming && (
+                {ragAnswer?.isThinking && (
+                  <span className="rag-streaming-pulse">
+                    <Sparkles size={12} className="sparkle-glow" /> Menelaah klausul...
+                  </span>
+                )}
+                {ragAnswer?.isStreaming && !ragAnswer?.isThinking && (
                   <span className="rag-streaming-pulse">
                     <span className="pulse-dot"></span> Mengetik...
                   </span>
@@ -488,15 +473,52 @@ export default function SemanticSearch({ onOpenViewer, onShowToast, initialQuery
               className="btn-copy-rag-pro"
               onClick={handleCopyAnswer}
               title="Salin hasil telaah ini ke clipboard"
-              disabled={ragAnswer.isStreaming}
+              disabled={ragAnswer?.isStreaming || isSynthesizing}
             >
               {copiedAnswer ? <Check size={14} color="#16a34a" /> : <Copy size={14} />}
               <span>{copiedAnswer ? 'Tersalin!' : 'Salin Telaah'}</span>
             </button>
           </div>
 
+          {/* Live Thinking Stream Box (DeepSeek Reasoner) */}
+          {ragAnswer?.thinking && (
+            <div className="rag-thinking-card">
+              <button 
+                type="button" 
+                className="rag-thinking-header" 
+                onClick={() => setShowThinking(!showThinking)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Sparkles size={14} color="#7c3aed" />
+                  <span className="rag-thinking-title">
+                    {ragAnswer.isThinking ? 'Sedang menganalisis naskah SPMI & landasan hukum...' : 'Analisis Naskah Selesai'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  <span>{showThinking ? 'Sembunyikan' : 'Lihat proses analisis'}</span>
+                  {showThinking ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
+              </button>
+              {showThinking && (
+                <div className="rag-thinking-body">
+                  {ragAnswer.thinking}
+                  {ragAnswer.isThinking && <span className="rag-cursor-blink">▍</span>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Content Body */}
           <div className="rag-content-pro">
-            {renderStructuredAnswer(ragAnswer.answer, ragAnswer.isStreaming)}
+            {ragAnswer?.answer ? (
+              renderStructuredAnswer(ragAnswer.answer, ragAnswer.isStreaming)
+            ) : (
+              <div className="rag-synthesizing-loader">
+                <Loader2 size={16} className="spin-slow" color="#7c3aed" />
+                <span>Membedah pasal & menyusun ketetapan resmi...</span>
+                <span className="rag-cursor-blink">▍</span>
+              </div>
+            )}
           </div>
 
           {ragAnswer.citations && ragAnswer.citations.length > 0 && (

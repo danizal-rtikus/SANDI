@@ -459,12 +459,12 @@ app.post('/api/answer/stream', async (req, res) => {
     // Kirim sitasi referensi terlebih dahulu
     res.write(`data: ${JSON.stringify({ type: 'citations', citations })}\n\n`);
 
-    // Stream token secara real-time
-    const { answer } = await generateRagAnswerStream(query, results || [], (token) => {
-      res.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
+    // Stream token & thinking secara real-time
+    const { answer, thinking } = await generateRagAnswerStream(query, results || [], (payload) => {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
     });
 
-    res.write(`data: ${JSON.stringify({ type: 'done', answer, citations })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'done', answer, citations, thinking })}\n\n`);
     res.end();
   } catch (error) {
     console.error('Error during streaming answer:', error);
