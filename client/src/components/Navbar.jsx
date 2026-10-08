@@ -57,7 +57,7 @@ export default function Navbar({
             Arsip Dokumen
           </button>
 
-          {(userRole === 'admin_mutu' || userRole === 'super_admin') && (
+          {userRole === 'admin' && (
             <button 
               className={`nav-tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
               onClick={() => setActiveTab('upload')}
@@ -85,18 +85,15 @@ export default function Navbar({
         </nav>
 
         {/* Controls & Role */}
-        <div className="nav-controls">
-          <div className="role-selector-wrap" title="Simulasi Peran Pengguna">
+          <div className="role-selector-wrap" title="Peran Pengguna">
             <UserCheck size={14} color="var(--brand-primary)" />
             <select 
               className="role-select" 
               value={userRole} 
               onChange={(e) => setUserRole(e.target.value)}
             >
-              <option value="dosen">Dosen / Tendik</option>
-              <option value="asesor">Asesor / Auditor</option>
-              <option value="admin_mutu">Admin Mutu (LPM)</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="user">User Biasa</option>
+              <option value="admin">Administrator</option>
             </select>
           </div>
 

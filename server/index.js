@@ -58,7 +58,7 @@ app.get('/api/config', (req, res) => {
     institution: 'STIKOM Yos Sudarso Purwokerto',
     version: '1.0.0',
     isSupabaseLive: dbStore.isSupabaseLive,
-    roles: ['super_admin', 'admin_mutu', 'asesor', 'dosen']
+    roles: ['admin', 'user']
   });
 });
 
@@ -252,7 +252,13 @@ app.post('/api/documents', upload.single('file'), async (req, res) => {
 // PATCH /api/documents/:id (Ubah metadata / status / aktifkan / nonaktifkan)
 app.patch('/api/documents/:id', async (req, res) => {
   try {
-    const updated = await dbStore.updateDocument(req.params.id, req.body);
+    const updates = { ...req.body };
+    if (updates.category_id && !updates.category_name) {
+      const categories = await dbStore.getCategories();
+      const cat = categories.find(c => Number(c.id) === Number(updates.category_id));
+      if (cat) updates.category_name = cat.name;
+    }
+    const updated = await dbStore.updateDocument(req.params.id, updates);
     if (!updated) {
       return res.status(404).json({ error: 'Dokumen tidak ditemukan' });
     }

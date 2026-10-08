@@ -5,25 +5,18 @@ import {
   FolderArchive, 
   UploadCloud, 
   BarChart3, 
-  BookOpen, 
-  FileText, 
   ShieldCheck, 
-  User, 
-  GraduationCap
+  User
 } from 'lucide-react';
 
 export default function Sidebar({ 
   activeTab, 
   setActiveTab, 
   isCollapsed, 
-  userRole 
+  userRole,
+  currentUser 
 }) {
-  const roleDisplayNames = {
-    dosen: 'Dosen / Tendik',
-    asesor: 'Asesor / Auditor',
-    admin_mutu: 'Admin Mutu (LPM)',
-    super_admin: 'Super Admin'
-  };
+  const isAdmin = userRole === 'admin';
 
   return (
     <aside className={`sirena-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
@@ -47,12 +40,19 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Role Pill Badge from Image 2 */}
+      {/* Role Pill Badge */}
       {!isCollapsed && (
         <div className="sidebar-role-badge-wrap">
-          <span className="role-pill-badge">
-            <ShieldCheck size={12} />
-            {roleDisplayNames[userRole] || 'Ka. Prodi'}
+          <span 
+            className="role-pill-badge"
+            style={{
+              backgroundColor: isAdmin ? 'rgba(124, 58, 237, 0.12)' : 'var(--bg-tag)',
+              color: isAdmin ? 'var(--primary-purple)' : 'var(--text-subtle)',
+              borderColor: isAdmin ? 'rgba(124, 58, 237, 0.25)' : 'var(--border-color)'
+            }}
+          >
+            {isAdmin ? <ShieldCheck size={12} /> : <User size={12} />}
+            {isAdmin ? 'Administrator' : 'User Biasa'}
           </span>
         </div>
       )}
@@ -97,11 +97,12 @@ export default function Sidebar({
             {!isCollapsed && <span>Repositori Dokumen</span>}
           </button>
 
-          {(userRole === 'admin_mutu' || userRole === 'super_admin' || userRole === 'asesor') && (
+          {/* Menu Upload Dokumen HANYA untuk Admin */}
+          {isAdmin && (
             <button 
               className={`sidebar-nav-item ${activeTab === 'upload' ? 'active' : ''}`}
               onClick={() => setActiveTab('upload')}
-              title="Upload Dokumen"
+              title="Upload Dokumen Baru"
             >
               <UploadCloud size={18} />
               {!isCollapsed && <span>Upload Dokumen</span>}
@@ -121,18 +122,20 @@ export default function Sidebar({
             {!isCollapsed && <span>Audit & Analitik</span>}
           </button>
         </div>
-
-
       </div>
 
-      {/* Sidebar Footer User Info from Image 2 */}
+      {/* Sidebar Footer User Info */}
       {!isCollapsed && (
         <div className="sidebar-footer">
-          <div className="sidebar-user-name" title="Dhany Faizal Racma, S.Kom., M.Kom.">
-            Dhany Faizal Racma, S.Kom., M.Kom.
+          <div 
+            className="sidebar-user-name" 
+            title={isAdmin ? (currentUser?.email || 'Administrator SPMI') : 'Pengguna Publik'}
+            style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+          >
+            {isAdmin ? (currentUser?.email ? currentUser.email.split('@')[0] : 'Administrator') : 'Civitas Akademika'}
           </div>
           <div className="sidebar-user-nidn">
-            NIDN: 0624038601
+            {isAdmin ? 'Lembaga Penjaminan Mutu' : 'STIKOM Yos Sudarso'}
           </div>
         </div>
       )}

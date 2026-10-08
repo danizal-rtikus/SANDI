@@ -9,7 +9,7 @@ create extension if not exists pg_trgm;
 
 -- 2. Tipe Enum
 do $$ begin
-  create type app_role as enum ('super_admin','admin_mutu','asesor','dosen');
+  create type app_role as enum ('admin', 'user');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -29,7 +29,7 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   full_name text,
-  role app_role not null default 'dosen',
+  role app_role not null default 'user',
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );

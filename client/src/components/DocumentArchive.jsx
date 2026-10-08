@@ -10,8 +10,12 @@ import {
   Eye, 
   CheckCircle, 
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  FileEdit,
+  Trash2
 } from 'lucide-react';
+import DocumentEditModal from './DocumentEditModal';
+import DocumentDeleteModal from './DocumentDeleteModal';
 
 export default function DocumentArchive({ onOpenViewer, onShowToast, userRole }) {
   const [documents, setDocuments] = useState([]);
@@ -20,6 +24,10 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
   const [categoryFilter, setCategoryFilter] = useState('');
   const [selectedDocDetails, setSelectedDocDetails] = useState(null);
   const [reindexingId, setReindexingId] = useState(null);
+
+  // Modals state for admin
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [deletingDoc, setDeletingDoc] = useState(null);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -76,6 +84,8 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
     const matchesCat = !categoryFilter || String(doc.category_id) === String(categoryFilter);
     return matchesSearch && matchesCat;
   });
+
+  const isAdmin = userRole === 'admin';
 
   return (
     <div>
@@ -205,6 +215,7 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      {/* Tombol Lihat: Selalu tersedia untuk semua role */}
                       <button 
                         className="btn-feedback"
                         onClick={() => onOpenViewer(doc.id, 1, '', doc.title, doc.description)}
@@ -214,16 +225,38 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
                         Lihat
                       </button>
 
-                      {(userRole === 'admin_mutu' || userRole === 'super_admin') && (
-                        <button 
-                          className="btn-feedback"
-                          disabled={reindexingId === doc.id}
-                          onClick={() => handleReindex(doc.id, doc.title)}
-                          title="Indeks Ulang Vektor Dokumen"
-                        >
-                          <RefreshCw size={13} className={reindexingId === doc.id ? 'animate-spin' : ''} />
-                          Reindex
-                        </button>
+                      {/* Tombol Edit, Reindex, Hapus: Khusus role Admin */}
+                      {isAdmin && (
+                        <>
+                          <button 
+                            className="btn-feedback"
+                            onClick={() => setEditingDoc(doc)}
+                            title="Edit Metadata Dokumen"
+                          >
+                            <FileEdit size={13} />
+                            Edit
+                          </button>
+
+                          <button 
+                            className="btn-feedback"
+                            disabled={reindexingId === doc.id}
+                            onClick={() => handleReindex(doc.id, doc.title)}
+                            title="Indeks Ulang Vektor Dokumen"
+                          >
+                            <RefreshCw size={13} className={reindexingId === doc.id ? 'animate-spin' : ''} />
+                            Reindex
+                          </button>
+
+                          <button 
+                            className="btn-feedback"
+                            onClick={() => setDeletingDoc(doc)}
+                            title="Hapus Dokumen Secara Permanen"
+                            style={{ color: '#dc2626' }}
+                          >
+                            <Trash2 size={13} />
+                            Hapus
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -239,6 +272,28 @@ export default function DocumentArchive({ onOpenViewer, onShowToast, userRole })
           </tbody>
         </table>
       </div>
+
+      {/* Modal Edit Dokumen (Admin) */}
+      {editingDoc && (
+        <DocumentEditModal
+          isOpen={!!editingDoc}
+          document={editingDoc}
+          onClose={() => setEditingDoc(null)}
+          onSaved={fetchDocuments}
+          onShowToast={onShowToast}
+        />
+      )}
+
+      {/* Modal Hapus Dokumen (Admin) */}
+      {deletingDoc && (
+        <DocumentDeleteModal
+          isOpen={!!deletingDoc}
+          document={deletingDoc}
+          onClose={() => setDeletingDoc(null)}
+          onDeleted={fetchDocuments}
+          onShowToast={onShowToast}
+        />
+      )}
     </div>
   );
 }

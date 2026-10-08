@@ -289,12 +289,12 @@ export default function SirenaDashboard({ onNavigateTab, onOpenViewer, onDirectS
           {recentLogs.length > 0 ? (
             recentLogs.slice(0, 5).map((l, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ede9fe', color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
-                  DF
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ede9fe', color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700 }}>
+                  US
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Dhany Faizal Racma melakukan penelusuran: "{l.query_text}"
+                    Pengguna Sistem melakukan penelusuran: "{l.query_text}"
                   </div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                     {l.results_count} hasil ditemukan • Latensi: {l.latency_ms || 110}ms

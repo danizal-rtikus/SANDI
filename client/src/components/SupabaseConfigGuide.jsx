@@ -21,7 +21,7 @@ create extension if not exists vector;
 create extension if not exists pg_trgm;
 
 -- Enum Types
-create type app_role as enum ('super_admin','admin_mutu','asesor','dosen');
+create type app_role as enum ('admin', 'user');
 create type doc_status as enum ('draft','processing','published','failed','superseded','archived');
 create type access_level as enum ('publik_internal','internal_terbatas');
 create type job_status as enum ('queued','extracting','embedding','ready','failed');
