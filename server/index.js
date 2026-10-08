@@ -16,11 +16,12 @@ import { dbStore, supabase } from './services/supabase.js';
 import { processPdfBuffer, computeSha256 } from './services/pdfProcessor.js';
 import { getEmbedding, generateRagAnswer } from './services/ai.js';
 
-// Pastikan direktori uploads tersedia
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+const supabaseUrl = process.env.SUPABASE_URL || 'https://fznhvuyplojsvcodxfkk.supabase.co';
 
 // Multer memory storage agar buffer langsung dapat diproses dan dihitung checksum-nya
 const upload = multer({
@@ -138,18 +139,28 @@ app.post('/api/documents', upload.single('file'), async (req, res) => {
     const filename = `${docId}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const localFilePath = path.join(uploadsDir, filename);
 
-    // Simpan file secara lokal
-    fs.writeFileSync(localFilePath, fileBuffer);
-    const storagePath = `/uploads/${filename}`;
-
-    // Coba upload ke Supabase Storage jika bucket tersedia
+    // Simpan file secara lokal sebagai cadangan
     try {
-      await supabase.storage.from('documents').upload(filename, fileBuffer, {
+      fs.writeFileSync(localFilePath, fileBuffer);
+    } catch (writeErr) {
+      console.warn('⚠️ Gagal menyimpan file lokal:', writeErr.message);
+    }
+    let storagePath = `/uploads/${filename}`;
+
+    // Upload ke Supabase Storage Cloud jika bucket tersedia
+    try {
+      const { error: uploadError } = await supabase.storage.from('documents').upload(filename, fileBuffer, {
         contentType: 'application/pdf',
         upsert: true
       });
+      if (!uploadError) {
+        const { data: publicData } = supabase.storage.from('documents').getPublicUrl(filename);
+        if (publicData?.publicUrl) {
+          storagePath = publicData.publicUrl;
+        }
+      }
     } catch (e) {
-      // lanjut dengan storage lokal
+      console.warn('⚠️ Supabase Storage upload error:', e.message);
     }
 
     // Buat job indeksasi
@@ -290,6 +301,11 @@ app.get('/api/documents/:id/file', async (req, res) => {
       return res.status(404).json({ error: 'Dokumen tidak ditemukan' });
     }
 
+    // Jika storage_path adalah URL cloud (Supabase)
+    if (doc.storage_path && (doc.storage_path.startsWith('http://') || doc.storage_path.startsWith('https://'))) {
+      return res.redirect(doc.storage_path);
+    }
+
     if (doc.storage_path && doc.storage_path.startsWith('/uploads/')) {
       const cleanRel = doc.storage_path.replace(/^\/+/, '');
       const filePath = path.join(__dirname, cleanRel);
@@ -298,10 +314,18 @@ app.get('/api/documents/:id/file', async (req, res) => {
         res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(path.basename(filePath))}"`);
         return res.sendFile(filePath);
       }
+
+      // Fallback cerdas: jika file lokal tidak ada di VPS, arahkan ke Supabase Storage
+      const filename = path.basename(filePath);
+      const supabaseFallback = `${supabaseUrl}/storage/v1/object/public/documents/${encodeURIComponent(filename)}`;
+      return res.redirect(supabaseFallback);
     }
 
-    // Jika file eksternal di Supabase
-    res.redirect(doc.storage_path);
+    // Fallback lainnya
+    if (doc.storage_path) {
+      return res.redirect(doc.storage_path);
+    }
+    res.status(404).json({ error: 'Berkas PDF tidak ditemukan' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
